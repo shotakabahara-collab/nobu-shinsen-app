@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>信長の野望 真戦 シミュレーター</title>
+
+<style>
+body{
+    margin:0;
+    background:#111827;
+    color:#fff;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+}
+
+header{
+    background:#1f2937;
+    padding:20px;
+    text-align:center;
+}
+
+h1{
+    margin:0;
+    color:#22c55e;
+}
+
+main{
+    max-width:700px;
+    margin:auto;
+    padding:30px;
+}
+
+.card{
+    background:#1f2937;
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:20px;
+}
+
+input,select{
+    width:100%;
+    padding:12px;
+    border-radius:8px;
+    border:none;
+    margin-top:10px;
+    margin-bottom:20px;
+}
+
+button{
+    width:100%;
+    padding:15px;
+    border:none;
+    border-radius:10px;
+    background:#22c55e;
+    color:white;
+    font-size:18px;
+}
+
+#result{
+    margin-top:30px;
+    font-size:22px;
+    text-align:center;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>信長の野望 真戦</h1>
+<p>戦闘シミュレーター β</p>
+</header>
+
+<main>
+
+<div class="card">
+
+<label>自軍兵力</label>
+<input id="my" type="number" value="10000">
+
+<label>敵兵力</label>
+<input id="enemy" type="number" value="10000">
+
+<button onclick="battle()">
+シミュレーション開始
+</button>
+
+</div>
+
+<div id="result"></div>
+
+</main>
+
+<script>
+
+function battle(){
+
+let my=parseInt(document.getElementById("my").value);
+
+let enemy=parseInt(document.getElementById("enemy").value);
+
+let myPower=my*(0.9+Math.random()*0.2);
+let enemyPower=enemy*(0.9+Math.random()*0.2);
+
+if(myPower>enemyPower){
+
+document.getElementById("result").innerHTML=
+"🏆 勝利<br><br>あなた："+Math.round(myPower)+"<br>敵："+Math.round(enemyPower);
+
+}else{
+
+document.getElementById("result").innerHTML=
+"💀 敗北<br><br>あなた："+Math.round(myPower)+"<br>敵："+Math.round(enemyPower);
+
+}
+
+}
+
+</script>
+
+</body>
+</html>
