@@ -1,1 +1,26 @@
-import {defineConfig,devices} from '@playwright/test';export default defineConfig({testDir:'./e2e',webServer:{command:'npm run build && npm run preview -- --host 127.0.0.1',url:'http://127.0.0.1:4173/nobu-shinsen-app/',reuseExistingServer:true,timeout:120_000},use:{baseURL:'http://127.0.0.1:4173/nobu-shinsen-app/'},projects:[{name:'iPhone viewport / Chromium',use:{...devices['iPhone 13'],browserName:'chromium'}}]});
+import {defineConfig,devices} from '@playwright/test';
+
+const baseURL='http://127.0.0.1:4173/nobu-shinsen-app/';
+
+export default defineConfig({
+ testDir:'./e2e',
+ webServer:{
+  command:'npm run build && npm run preview -- --host 127.0.0.1',
+  url:baseURL,
+  reuseExistingServer:true,
+  timeout:120_000,
+ },
+ use:{baseURL},
+ projects:[
+  {
+   name:'iPhone viewport / Chromium',
+   testMatch:/app\.spec\.ts/,
+   use:{...devices['iPhone 13'],browserName:'chromium'},
+  },
+  {
+   name:'iPhone compatibility / WebKit',
+   testMatch:/webkit\.spec\.ts/,
+   use:{...devices['iPhone 13'],browserName:'webkit'},
+  },
+ ],
+});
