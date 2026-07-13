@@ -30,6 +30,7 @@ jobs:
       - uses: actions/configure-pages@v5
       - run: npm ci
       - run: npm audit --omit=dev
+      - run: npm run build:runtime
       - run: npm run test:runtime
       - run: npm test
       - run: npm run build
@@ -47,6 +48,7 @@ jobs:
         run: |
           base="${PAGE_URL%/}/"
           expected_bundle_sha="$(node -p "require('./canonical/LOCK.json').runtimeBundleSha256")"
+          expected_archive_sha="$(node -p "require('./canonical/LOCK.json').archiveSha256")"
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}" -o /tmp/nobu-index.html
           grep -Fq '<title>NOBU Companion</title>' /tmp/nobu-index.html
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}manifest.webmanifest" -o /tmp/nobu-manifest.json
@@ -55,6 +57,10 @@ jobs:
           grep -Fq 'browser_runtime_api' /tmp/runtime-worker.js
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}runtime_bundle_b223.tgz" -o /tmp/runtime_bundle_b223.tgz
           echo "${expected_bundle_sha}  /tmp/runtime_bundle_b223.tgz" | sha256sum --check --strict
+          curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}canonical_officer_catalog.json" -o /tmp/canonical_officer_catalog.json
+          node -e "const c=require('/tmp/canonical_officer_catalog.json');const m=new Map(c.officers.map(x=>[x.name,x.inherentSkill]));if(c.canonicalArchiveSha256!==process.argv[1]||c.officerCount!==c.officers.length||m.get('松永久秀')!=='梟雄の計')process.exit(1)" "${expected_archive_sha}"
+          curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}canonical_skill_catalog.json" -o /tmp/canonical_skill_catalog.json
+          node -e "const c=require('/tmp/canonical_skill_catalog.json');const n=new Set(c.skills.map(x=>x.name));if(c.canonicalArchiveSha256!==process.argv[1]||c.skillCount!==c.skills.length||!n.has('紅蓮の炎'))process.exit(1)" "${expected_archive_sha}"
       - name: Record release audit
         if: always()
         uses: actions/github-script@v7
@@ -67,6 +73,10 @@ jobs:
             const fs = require('fs');
             const path = require('path');
             const lock = JSON.parse(fs.readFileSync(path.join(process.env.GITHUB_WORKSPACE, 'canonical/LOCK.json'), 'utf8'));
+            const officerPath = path.join(process.env.GITHUB_WORKSPACE, 'public/canonical_officer_catalog.json');
+            const skillPath = path.join(process.env.GITHUB_WORKSPACE, 'public/canonical_skill_catalog.json');
+            const officerCatalog = fs.existsSync(officerPath) ? JSON.parse(fs.readFileSync(officerPath, 'utf8')) : null;
+            const skillCatalog = fs.existsSync(skillPath) ? JSON.parse(fs.readFileSync(skillPath, 'utf8')) : null;
             const passed = process.env.DEPLOY_OUTCOME === 'success' && process.env.SMOKE_OUTCOME === 'success';
             const status = passed ? 'PASS' : 'FAIL';
             const pageUrl = process.env.PAGE_URL || '未取得';
@@ -80,6 +90,8 @@ jobs:
               `- post-deploy smoke: ${process.env.SMOKE_OUTCOME || 'unknown'}`,
               `- canonical version: \`${lock.canonicalVersion}\``,
               `- runtime bundle SHA-256: \`${lock.runtimeBundleSha256}\``,
+              `- canonical officer catalog: ${officerCatalog ? `${officerCatalog.officerCount}武将` : '未生成'}`,
+              `- canonical skill catalog: ${skillCatalog ? `${skillCatalog.skillCount}戦法` : '未生成'}`,
               '',
               '## Smoke対象',
               '',
@@ -87,9 +99,11 @@ jobs:
               '- PWA manifest / standalone設定',
               '- runtime-worker.js / canonical adapter参照',
               '- runtime_bundle_b223.tgz / release lock SHA一致',
+              '- canonical_officer_catalog.json / archive SHA・件数・既知対応一致',
+              '- canonical_skill_catalog.json / archive SHA・件数・既知戦法一致',
               '',
               passed
-                ? '機械検証範囲はリリースPASSです。物理iPhoneではアプリ内の6項目リリース診断を実行してください。'
+                ? '機械検証範囲はリリースPASSです。物理iPhoneでは武将名・戦法名の一部入力から候補選択できることを確認してください。'
                 : '公開工程またはsmokeに失敗しています。GitHub ActionsのDeploy GitHub Pagesログを確認してください。',
             ].join('\n');
             const params = {
