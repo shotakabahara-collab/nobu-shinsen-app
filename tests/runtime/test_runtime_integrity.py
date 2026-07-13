@@ -25,11 +25,25 @@ class RuntimeIntegrityTest(unittest.TestCase):
    self.assertEqual(sha_bytes(bundle.extractfile(LOCK['battleRuntimePath']).read()),LOCK['battleRuntimeSha256'])
    self.assertIn('02_ENGINE/browser_runtime_api.py',names)
 
+ def test_generated_officer_catalog_matches_canonical_db(self):
+  catalog_bytes=(ROOT/'public/canonical_officer_catalog.json').read_bytes()
+  catalog=json.loads(catalog_bytes)
+  self.assertEqual(catalog['schemaVersion'],1)
+  self.assertEqual(catalog['canonicalVersion'],LOCK['canonicalVersion'])
+  self.assertEqual(catalog['canonicalArchiveSha256'],LOCK['archiveSha256'])
+  self.assertEqual(catalog['officerCount'],len(catalog['officers']))
+  names=[row['name'] for row in catalog['officers']]
+  self.assertEqual(len(names),len(set(names)))
+  self.assertEqual({row['name']:row['inherentSkill'] for row in catalog['officers']}['松永久秀'],'梟雄の計')
+
  def test_bundle_manifest_matches_release_lock(self):
   manifest=json.loads((ROOT/'public/runtime_bundle_b223.manifest.json').read_text())
+  catalog_bytes=(ROOT/'public/canonical_officer_catalog.json').read_bytes()
   self.assertEqual(manifest['canonicalArchiveSha256'],LOCK['archiveSha256'])
   self.assertEqual(manifest['battleRuntimeSha256'],LOCK['battleRuntimeSha256'])
   self.assertEqual(manifest['bundleSha256'],LOCK['runtimeBundleSha256'])
   self.assertEqual(manifest['duplicateMemberCount'],0)
+  self.assertEqual(manifest['officerCatalogSha256'],sha_bytes(catalog_bytes))
+  self.assertEqual(manifest['officerCatalogCount'],json.loads(catalog_bytes)['officerCount'])
 
 if __name__=='__main__':unittest.main()
