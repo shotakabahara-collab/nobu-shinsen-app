@@ -38,8 +38,8 @@ describe('FormationEditor',()=>{
 
  it('autofills and locks the inherent skill when a canonical warrior name matches',()=>{
   render(<FormationEditor canonicalOfficers={canonical} onSave={()=>{}} onCancel={()=>{}}/>);
-  fireEvent.change(screen.getByRole('textbox',{name:'大将 武将名'}),{target:{value:'松永久秀'}});
-  const inherent=screen.getByRole('textbox',{name:'大将 固有戦法'});
+  fireEvent.change(screen.getByLabelText('大将 武将名'),{target:{value:'松永久秀'}});
+  const inherent=screen.getByLabelText('大将 固有戦法');
   expect(inherent).toHaveValue('梟雄の計');
   expect(inherent).toHaveAttribute('readonly');
   expect(screen.getByText('正本DB自動')).toBeVisible();
@@ -47,10 +47,10 @@ describe('FormationEditor',()=>{
 
  it('clears a stale inherent skill when the name no longer matches the canonical catalog',()=>{
   render(<FormationEditor canonicalOfficers={canonical} onSave={()=>{}} onCancel={()=>{}}/>);
-  const name=screen.getByRole('textbox',{name:'大将 武将名'});
+  const name=screen.getByLabelText('大将 武将名');
   fireEvent.change(name,{target:{value:'松永久秀'}});
   fireEvent.change(name,{target:{value:'未登録武将'}});
-  const inherent=screen.getByRole('textbox',{name:'大将 固有戦法'});
+  const inherent=screen.getByLabelText('大将 固有戦法');
   expect(inherent).toHaveValue('未登録');
   expect(inherent).not.toHaveAttribute('readonly');
  });
@@ -61,7 +61,7 @@ describe('FormationEditor',()=>{
   value.warriors[0].inherentSkill='誤った固有';
   const save=vi.fn();
   render(<FormationEditor initial={value} canonicalOfficers={canonical} onSave={save} onCancel={()=>{}}/>);
-  await waitFor(()=>expect(screen.getByRole('textbox',{name:'大将 固有戦法'})).toHaveValue('七十二の計'));
+  await waitFor(()=>expect(screen.getByLabelText('大将 固有戦法')).toHaveValue('七十二の計'));
   fireEvent.click(screen.getByRole('button',{name:'保存'}));
   await waitFor(()=>expect(save).toHaveBeenCalledTimes(1));
   expect(save.mock.calls[0]?.[0].warriors[0].inherentSkill).toBe('七十二の計');
