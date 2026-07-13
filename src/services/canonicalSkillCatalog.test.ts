@@ -19,7 +19,9 @@ describe('loadCanonicalSkillCatalog',()=>{
  });
 
  it('rejects duplicate skill names',async()=>{
-  const duplicate={...payload,skills:[payload.skills[0],{...payload.skills[1],name:payload.skills[0].name}]};
+  const first=payload.skills[0]!;
+  const second=payload.skills[1]!;
+  const duplicate={...payload,skills:[first,{...second,name:first.name}]};
   const fetcher=async()=>new Response(JSON.stringify(duplicate),{status:200});
   await expect(loadCanonicalSkillCatalog(fetcher as typeof fetch,'/catalog.json')).rejects.toThrow(/重複/);
  });
