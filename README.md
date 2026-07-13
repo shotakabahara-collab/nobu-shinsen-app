@@ -4,14 +4,16 @@
 
 ## 現在の状態
 
-- 実装済み: 3武将・凸・固有戦法・装着戦法2枠・兵種/Lv/兵力の入力、検証、端末保存、JSON出力
-- 未実装: b223 battle runtime adapter、勝率計算、戦闘ログ、編成DB
-- 未検証: b223の実データを用いたE2E戦闘再現、iPhone実機
+- 実装済み: 型付き編成モデル、IndexedDB、JSON Import/Export、b223保護adapter、calculate/search/formal境界、実勝率表示
+- 未実装: Battle Log UI、探索UI、AI提案、武将・戦法・敵編成の商用品質CRUD
+- 未検証: iPhone Safari実機、Playwright mobile、初回導入後の完全オフライン動作
 
-未接続状態では勝率を表示しません。b223 battle runtime自体はこのリポジトリに含めず、変更しません。
+b223正本は `canonical/` にSHA固定で格納し、adapterは正本外に配置しています。SHAテストに合格しないbundleは生成できません。
 
 ## テスト
 
 ```sh
 npm test
+npm run test:runtime
+npm run build
 ```
