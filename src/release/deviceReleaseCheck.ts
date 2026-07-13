@@ -6,6 +6,9 @@ export const DEVICE_RELEASE_STORAGE_KEY='nobu-device-release-check-v1';
 export type DeviceRuntimeEvidence={
  onlinePassedAt:string|null;
  offlinePassedAt:string|null;
+ storagePreparedAt:string|null;
+ storagePreparedBootId:string|null;
+ storageVerifiedAt:string|null;
  lastRuntime:string|null;
  lastWinRate:number|null;
  lastHpDiff:number|null;
@@ -29,6 +32,9 @@ export type DeviceReleaseAssessment={
 export const emptyDeviceRuntimeEvidence:DeviceRuntimeEvidence={
  onlinePassedAt:null,
  offlinePassedAt:null,
+ storagePreparedAt:null,
+ storagePreparedBootId:null,
+ storageVerifiedAt:null,
  lastRuntime:null,
  lastWinRate:null,
  lastHpDiff:null,
@@ -74,12 +80,16 @@ export function validateDeviceRuntimeResult(result:RuntimeResult){
  return result;
 }
 
-export function recordDeviceRuntimeEvidence(previous:DeviceRuntimeEvidence,result:RuntimeResult,online:boolean,now=new Date().toISOString()):DeviceRuntimeEvidence{
+export function recordDeviceRuntimeEvidence(previous:DeviceRuntimeEvidence,result:RuntimeResult,online:boolean,bootId:string,now=new Date().toISOString()):DeviceRuntimeEvidence{
  validateDeviceRuntimeResult(result);
+ const verifiedAcrossRelaunch=!online&&Boolean(previous.storagePreparedBootId)&&previous.storagePreparedBootId!==bootId;
  return {
   ...previous,
   onlinePassedAt:online?now:previous.onlinePassedAt,
   offlinePassedAt:online?previous.offlinePassedAt:now,
+  storagePreparedAt:online?now:previous.storagePreparedAt,
+  storagePreparedBootId:online?bootId:previous.storagePreparedBootId,
+  storageVerifiedAt:verifiedAcrossRelaunch?now:previous.storageVerifiedAt,
   lastRuntime:result.runtime,
   lastWinRate:result.win_rate!,
   lastHpDiff:result.hp_diff!,
@@ -92,7 +102,7 @@ export function assessDeviceRelease(diagnostics:PwaDiagnostics,evidence:DeviceRu
   standalone:diagnostics.standalone,
   serviceWorker:diagnostics.serviceWorker,
   offlineCache:diagnostics.offlineCache,
-  storage:diagnostics.persistedStorage!==false,
+  storage:diagnostics.persistedStorage===true||Boolean(evidence.storageVerifiedAt),
   onlineRuntime:Boolean(evidence.onlinePassedAt),
   offlineRuntime:Boolean(evidence.offlinePassedAt),
  };
@@ -107,6 +117,9 @@ export function parseDeviceRuntimeEvidence(raw:string|null):DeviceRuntimeEvidenc
   return {
    onlinePassedAt:typeof value.onlinePassedAt==='string'?value.onlinePassedAt:null,
    offlinePassedAt:typeof value.offlinePassedAt==='string'?value.offlinePassedAt:null,
+   storagePreparedAt:typeof value.storagePreparedAt==='string'?value.storagePreparedAt:null,
+   storagePreparedBootId:typeof value.storagePreparedBootId==='string'?value.storagePreparedBootId:null,
+   storageVerifiedAt:typeof value.storageVerifiedAt==='string'?value.storageVerifiedAt:null,
    lastRuntime:typeof value.lastRuntime==='string'?value.lastRuntime:null,
    lastWinRate:typeof value.lastWinRate==='number'?value.lastWinRate:null,
    lastHpDiff:typeof value.lastHpDiff==='number'?value.lastHpDiff:null,
