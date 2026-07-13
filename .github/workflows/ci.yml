@@ -19,6 +19,7 @@ jobs:
       - run: npm run test:runtime
       - run: npm test
       - run: npm run build
+      - run: npm run test:offline
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - if: failure()

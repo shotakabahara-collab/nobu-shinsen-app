@@ -1,0 +1,2 @@
+import {copyFile,mkdir,rm} from 'node:fs/promises';import {dirname,join} from 'node:path';import {fileURLToPath} from 'node:url';
+const root=dirname(dirname(fileURLToPath(import.meta.url))),source=join(root,'node_modules','pyodide'),target=join(root,'public','pyodide');const files=['pyodide.js','pyodide.asm.js','pyodide.asm.wasm','pyodide-lock.json','python_stdlib.zip'];await rm(target,{recursive:true,force:true});await mkdir(target,{recursive:true});await Promise.all(files.map(file=>copyFile(join(source,file),join(target,file))));

@@ -1,5 +1,5 @@
 let pyodide=null,ready=false;
-const PYODIDE_BASE='https://cdn.jsdelivr.net/pyodide/v0.26.4/full/';
+const PYODIDE_BASE=new URL('pyodide/',self.location.href).href;
 async function init(bundleUrl){if(ready)return;importScripts(PYODIDE_BASE+'pyodide.js');pyodide=await loadPyodide({indexURL:PYODIDE_BASE});const response=await fetch(bundleUrl);if(!response.ok)throw new Error(`runtime bundle HTTP ${response.status}`);pyodide.FS.writeFile('/runtime.tgz',new Uint8Array(await response.arrayBuffer()));await pyodide.runPythonAsync(`
 import os,sys,tarfile
 os.makedirs('/nobu',exist_ok=True)
