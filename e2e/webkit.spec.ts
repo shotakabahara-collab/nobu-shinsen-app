@@ -63,7 +63,7 @@ test('runs the real b223 calculate flow in an iPhone WebKit environment',async({
   mimeType:'application/json',
   buffer:Buffer.from(JSON.stringify(backup)),
  });
- await expect(page.getByRole('status')).toContainText('編成2件');
+ await expect(page.getByText('バックアップを復元しました（編成2件）',{exact:true})).toBeVisible();
 
  await page.getByRole('button',{name:'対戦'}).click();
  await expect(page.getByLabel('自軍')).toHaveValue(backup.formations[0].id);
