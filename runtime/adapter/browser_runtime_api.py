@@ -11,6 +11,8 @@ def _ctx():
     return _CTX
 
 def _make(spec):
+    if int(spec.get('troops',10000)) != 10000:
+        raise ValueError('b223 formal initial troops are fixed at 10000 per officer')
     ctx=_ctx(); officers=resolve_officers_by_awaken_values(ctx,spec['officers'],spec['awaken'])
     overrides=spec.get('stats') or []
     for i,row in enumerate(overrides[:len(officers)]):
@@ -21,7 +23,10 @@ def _make(spec):
                 if jp=='速度':officers[i]['行動順用速度']=str(val)
         officers[i]['browser_manual_stat_override']=True
     skills=resolve_skills(ctx,spec['skills'])
-    return build_best(ctx,officers,skills,spec['unit'],spec.get('mode','owned'),fixed_placement=bool(spec.get('fixed_placement',True)),ignore_formal_overlap=bool(spec.get('ignore_formal_overlap',True)))
+    result=build_best(ctx,officers,skills,spec['unit'],spec.get('mode','owned'),fixed_placement=bool(spec.get('fixed_placement',True)),ignore_formal_overlap=bool(spec.get('ignore_formal_overlap',True)))
+    if spec.get('unit_level') is not None:
+        result['unit_level']=int(spec['unit_level']);result['unit_coef']=1.0+int(spec['unit_level'])*0.02;result['unit_level_sources']=['NOBU Companion explicit input via protected adapter']
+    return result
 
 TARGETS={
 'YAMAGATA':{'officers':['山県昌景','飯富虎昌','真田昌幸'],'awaken':[5,5,2],'unit':'騎馬','skills':['矢石飛交','血戦奮闘','赤備え隊','理非曲直','瞬息万変','帰還の凱歌']},

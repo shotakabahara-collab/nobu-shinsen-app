@@ -1,6 +1,8 @@
 node_modules/
 dist/
 public/pyodide/
+public/runtime_bundle_b223.tgz
+public/runtime_bundle_b223.manifest.json
 coverage/
 test-results/
 playwright-report/
