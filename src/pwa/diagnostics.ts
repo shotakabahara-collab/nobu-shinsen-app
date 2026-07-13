@@ -13,3 +13,5 @@ export async function collectPwaDiagnostics(sources:DiagnosticSources=browserSou
  const [serviceWorker,offlineCache,persistedStorage]=await Promise.all([sources.serviceWorker(),sources.offlineCache(),sources.persistedStorage()]);
  return {standalone:sources.standalone(),online:sources.online(),serviceWorker,offlineCache,persistedStorage};
 }
+
+export async function requestPersistentStorage(request:()=>Promise<boolean>|undefined=()=>navigator.storage?.persist?.()){const result=await request();return typeof result==='boolean'?result:null;}
