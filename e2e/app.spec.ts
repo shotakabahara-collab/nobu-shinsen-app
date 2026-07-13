@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 
-test('opens on iPhone and exposes install, creation, battle, search and backup flows',async({page,request})=>{
+test('opens on iPhone and exposes predictive warrior and skill selection',async({page,request})=>{
  await page.goto('./');
  await expect(page.getByRole('heading',{name:'NOBU Companion'})).toBeVisible();
  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute('content','yes');
@@ -9,11 +9,19 @@ test('opens on iPhone and exposes install, creation, battle, search and backup f
  await expect(page.getByText('iPhoneホーム画面に追加')).toBeVisible();
  expect((await request.get('/nobu-shinsen-app/apple-touch-icon.png')).ok()).toBe(true);
  expect((await request.get('/nobu-shinsen-app/canonical_officer_catalog.json')).ok()).toBe(true);
+ expect((await request.get('/nobu-shinsen-app/canonical_skill_catalog.json')).ok()).toBe(true);
  await page.getByRole('button',{name:'新規'}).click();
- await page.getByLabel('大将 武将名').fill('松永久秀');
+ const warrior=page.getByRole('combobox',{name:'大将 武将名'});
+ await warrior.fill('永久');
+ await page.getByRole('option',{name:/松永久秀/}).click();
+ await expect(warrior).toHaveValue('松永久秀');
  await expect(page.getByLabel('大将 固有戦法')).toHaveValue('梟雄の計');
  await expect(page.getByLabel('大将 固有戦法')).toHaveAttribute('readonly');
  await expect(page.getByText('正本DB自動')).toBeVisible();
+ const skill=page.getByRole('combobox',{name:'大将 装着戦法1'});
+ await skill.fill('蓮の');
+ await page.getByRole('option',{name:/紅蓮の炎/}).click();
+ await expect(skill).toHaveValue('紅蓮の炎');
  await page.getByRole('button',{name:'キャンセル'}).click();
  await page.getByRole('button',{name:'対戦'}).click();
  await expect(page.getByRole('button',{name:'10×1で計算'})).toBeDisabled();
