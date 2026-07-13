@@ -2,6 +2,7 @@
 from __future__ import annotations
 import gzip, hashlib, io, json, shutil, tarfile, tempfile, zipfile
 from pathlib import Path
+from canonical_archive import canonical_archive_bytes
 
 ROOT=Path(__file__).resolve().parents[1]
 LOCK=json.loads((ROOT/'canonical/LOCK.json').read_text(encoding='utf-8'))
@@ -15,8 +16,9 @@ def sha(path:Path)->str:
     return h.hexdigest()
 
 def main()->int:
-    if sha(ARCHIVE)!=LOCK['archiveSha256']:raise SystemExit('canonical archive SHA mismatch')
-    with zipfile.ZipFile(ARCHIVE) as z:
+    try:archive_bytes=canonical_archive_bytes(ROOT,LOCK['archive'],LOCK['archiveSha256'])
+    except RuntimeError as error:raise SystemExit(str(error)) from error
+    with zipfile.ZipFile(io.BytesIO(archive_bytes)) as z:
         names=[i.filename for i in z.infolist()]
         if len(names)!=len(set(names)):raise SystemExit('canonical ZIP contains duplicate members')
         with tempfile.TemporaryDirectory() as td:
