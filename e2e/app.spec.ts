@@ -6,6 +6,7 @@ test('opens on iPhone and exposes install, creation, battle, search and backup f
  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute('content','yes');
  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href','apple-touch-icon.png');
  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href','/nobu-shinsen-app/manifest.webmanifest');
+ await expect(page.getByText('iPhoneホーム画面に追加')).toBeVisible();
  expect((await request.get('/nobu-shinsen-app/apple-touch-icon.png')).ok()).toBe(true);
  await expect(page.getByRole('button',{name:'新規'})).toBeVisible();
  await page.getByRole('button',{name:'対戦'}).click();
