@@ -14,6 +14,7 @@ test('opens on iPhone and exposes install, creation, battle, search and backup f
  await page.getByRole('button',{name:'探索'}).click();
  await expect(page.getByRole('button',{name:'探索を開始'})).toBeDisabled();
  await page.getByRole('button',{name:'データ'}).click();
+ await expect(page.getByRole('region',{name:'PWA実機診断'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'武将管理'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'戦法管理'})).toBeVisible();
  await expect(page.getByRole('button',{name:/Export/})).toBeVisible();
