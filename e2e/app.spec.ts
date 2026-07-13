@@ -34,7 +34,7 @@ test('calculates a reproducible real-data battle online and offline through b223
  await page.goto('./');
  await page.getByRole('button',{name:'データ'}).click();
  await page.locator('input[type="file"]').setInputFiles({name:'canonical-e2e.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
- await expect(page.getByRole('status')).toContainText('編成2件');
+ await expect(page.getByText('バックアップを復元しました（編成2件）',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'対戦'}).click();
  await expect(page.getByLabel('自軍')).toHaveValue(backup.formations[0].id);
  await expect(page.getByLabel('敵軍')).toHaveValue(backup.formations[1].id);
@@ -47,7 +47,7 @@ test('calculates a reproducible real-data battle online and offline through b223
  await context.setOffline(true);
  await page.reload();
  await expect(page.getByRole('heading',{name:'NOBU Companion'})).toBeVisible();
- await expect(page.getByRole('status')).toContainText('オフラインで利用中');
+ await expect(page.getByText('オフラインで利用中',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'対戦'}).click();
  await expect(page.getByLabel('自軍')).toHaveValue(backup.formations[0].id);
  await expect(page.getByLabel('敵軍')).toHaveValue(backup.formations[1].id);
