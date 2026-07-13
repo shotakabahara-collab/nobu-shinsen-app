@@ -23,7 +23,13 @@ jobs:
       - run: npm audit --omit=dev
       - run: npm run build:runtime
       - run: npm run test:runtime
-      - run: npm test
+      - run: npm test -- --reporter=json --outputFile=vitest-report.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-report
+          path: vitest-report.json
+          if-no-files-found: ignore
       - run: npm run build
       - run: npm run test:offline
       - run: npm run test:e2e
