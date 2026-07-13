@@ -50,7 +50,7 @@ export function CatalogManager({warriors,skills,onSaveWarrior,onRemoveWarrior,on
     <Button aria-label={editingWarrior?'武将の変更を保存':'武将を追加'} onClick={()=>void saveWarrior()}>{editingWarrior?<Pencil className="size-4"/>:<Plus className="size-4"/>}</Button>
    </div>
    {editingWarrior&&<Button className="mt-2 w-full" variant="secondary" onClick={resetWarrior}><X className="mr-2 size-4"/>編集を取消</Button>}
-   {warriors.map(value=><div key={value.id} className="mt-2 flex min-h-12 items-center justify-between rounded-lg bg-slate-950 px-3"><span>{value.name}<small className="ml-2 text-slate-500">{value.limitBreak}凸</small></span><div className="flex gap-2"><Button variant="secondary" aria-label={`${value.name}を編集`} onClick={()=>beginWarrior(value)}><Pencil className="size-4"/></Button><Button variant="danger" aria-label={`${value.name}を削除`} onClick={()=>{if(window.confirm(`${value.name}を削除しますか？`))void onRemoveWarrior(value.id);}}><Trash2 className="size-4"/></Button></div></div>)}
+   {warriors.map(value=><div key={value.id} className="mt-2 flex min-h-12 items-center justify-between rounded-lg bg-slate-950 px-3"><span>{value.name}<small className="ml-2 text-slate-500">{value.limitBreak}凸</small></span><div className="flex gap-2"><Button variant="secondary" aria-label={`${value.name}を編集`} onClick={()=>beginWarrior(value)}><Pencil className="size-4"/></Button><Button variant="danger" aria-label={`${value.name}を削除`} onClick={()=>{if(window.confirm(`${value.name}を削除しますか？`))void onRemoveWarrior(value.id).catch(()=>{});}}><Trash2 className="size-4"/></Button></div></div>)}
   </section>
   <section className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
    <h3 className="mb-3 font-bold">戦法管理</h3>
@@ -60,7 +60,7 @@ export function CatalogManager({warriors,skills,onSaveWarrior,onRemoveWarrior,on
     <Button className="col-span-2" onClick={()=>void saveSkill()}>{editingSkill?<Pencil className="mr-2 size-4"/>:<Plus className="mr-2 size-4"/>}{editingSkill?'戦法の変更を保存':'所有戦法を追加'}</Button>
    </div>
    {editingSkill&&<Button className="mt-2 w-full" variant="secondary" onClick={resetSkill}><X className="mr-2 size-4"/>編集を取消</Button>}
-   {skills.map(value=><div key={value.id} className="mt-2 flex min-h-12 items-center justify-between rounded-lg bg-slate-950 px-3"><span>{value.name}<small className="ml-2 text-slate-500">所有・{value.category}</small></span><div className="flex gap-2"><Button variant="secondary" aria-label={`${value.name}を編集`} onClick={()=>beginSkill(value)}><Pencil className="size-4"/></Button><Button variant="danger" aria-label={`${value.name}を削除`} onClick={()=>{if(window.confirm(`${value.name}を削除しますか？`))void onRemoveSkill(value.id);}}><Trash2 className="size-4"/></Button></div></div>)}
+   {skills.map(value=><div key={value.id} className="mt-2 flex min-h-12 items-center justify-between rounded-lg bg-slate-950 px-3"><span>{value.name}<small className="ml-2 text-slate-500">所有・{value.category}</small></span><div className="flex gap-2"><Button variant="secondary" aria-label={`${value.name}を編集`} onClick={()=>beginSkill(value)}><Pencil className="size-4"/></Button><Button variant="danger" aria-label={`${value.name}を削除`} onClick={()=>{if(window.confirm(`${value.name}を削除しますか？`))void onRemoveSkill(value.id).catch(()=>{});}}><Trash2 className="size-4"/></Button></div></div>)}
   </section>
  </div>;
 }

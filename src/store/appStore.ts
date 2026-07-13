@@ -1,3 +1,28 @@
-import {create} from 'zustand';import {db} from '../db/database';import type {BattleResult,CompanionExport,Formation,SkillRecord,WarriorRecord} from '../domain/schemas';
-type State={formations:Formation[];warriors:WarriorRecord[];skills:SkillRecord[];battleResults:BattleResult[];loading:boolean;error:string|null;load:()=>Promise<void>;save:(v:Formation)=>Promise<void>;remove:(id:string)=>Promise<void>;saveWarrior:(v:WarriorRecord)=>Promise<void>;removeWarrior:(id:string)=>Promise<void>;saveSkill:(v:SkillRecord)=>Promise<void>;removeSkill:(id:string)=>Promise<void>;saveBattleResult:(v:BattleResult)=>Promise<void>;replaceAll:(v:CompanionExport)=>Promise<void>};
-export const useAppStore=create<State>((set,get)=>({formations:[],warriors:[],skills:[],battleResults:[],loading:false,error:null,load:async()=>{set({loading:true,error:null});try{const [formations,warriors,skills,battleResults]=await Promise.all([db.formations.orderBy('updatedAt').reverse().toArray(),db.warriors.orderBy('name').toArray(),db.skills.orderBy('name').toArray(),db.battleResults.orderBy('createdAt').reverse().toArray()]);set({formations,warriors,skills,battleResults,loading:false});}catch(e){set({error:e instanceof Error?e.message:'読込に失敗しました',loading:false});}},save:async(v)=>{await db.formations.put(v);await get().load();},remove:async(id)=>{await db.formations.delete(id);await get().load();},saveWarrior:async(v)=>{await db.warriors.put(v);await get().load();},removeWarrior:async(id)=>{await db.warriors.delete(id);await get().load();},saveSkill:async(v)=>{await db.skills.put(v);await get().load();},removeSkill:async(id)=>{await db.skills.delete(id);await get().load();},saveBattleResult:async(v)=>{await db.battleResults.put(v);await get().load();},replaceAll:async(v)=>{await db.transaction('rw',db.formations,db.warriors,db.skills,db.battleResults,async()=>{await Promise.all([db.formations.clear(),db.warriors.clear(),db.skills.clear(),db.battleResults.clear()]);await db.formations.bulkPut(v.formations);await db.warriors.bulkPut(v.warriors);await db.skills.bulkPut(v.skills);await db.battleResults.bulkPut(v.battleResults);});await get().load();}}));
+import {create} from 'zustand';
+import {db} from '../db/database';
+import type {BattleResult,CompanionExport,Formation,SkillRecord,WarriorRecord} from '../domain/schemas';
+
+type State={formations:Formation[];warriors:WarriorRecord[];skills:SkillRecord[];battleResults:BattleResult[];loading:boolean;error:string|null;clearError:()=>void;load:()=>Promise<void>;save:(value:Formation)=>Promise<void>;remove:(id:string)=>Promise<void>;saveWarrior:(value:WarriorRecord)=>Promise<void>;removeWarrior:(id:string)=>Promise<void>;saveSkill:(value:SkillRecord)=>Promise<void>;removeSkill:(id:string)=>Promise<void>;saveBattleResult:(value:BattleResult)=>Promise<void>;replaceAll:(value:CompanionExport)=>Promise<void>};
+
+export function storageErrorMessage(error:unknown,operation:string){return `${operation}に失敗しました${error instanceof Error&&error.message?`: ${error.message}`:''}`;}
+
+export const useAppStore=create<State>((set,get)=>{
+ async function mutate(operation:string,action:()=>Promise<unknown>){
+  set({error:null});
+  try{await action();await get().load();}
+  catch(error){set({error:storageErrorMessage(error,operation),loading:false});throw error;}
+ }
+ return {
+  formations:[],warriors:[],skills:[],battleResults:[],loading:false,error:null,
+  clearError:()=>set({error:null}),
+  load:async()=>{set({loading:true,error:null});try{const [formations,warriors,skills,battleResults]=await Promise.all([db.formations.orderBy('updatedAt').reverse().toArray(),db.warriors.orderBy('name').toArray(),db.skills.orderBy('name').toArray(),db.battleResults.orderBy('createdAt').reverse().toArray()]);set({formations,warriors,skills,battleResults,loading:false});}catch(error){set({error:storageErrorMessage(error,'データの読込'),loading:false});}},
+  save:value=>mutate('編成の保存',()=>db.formations.put(value)),
+  remove:id=>mutate('編成の削除',()=>db.formations.delete(id)),
+  saveWarrior:value=>mutate('武将の保存',()=>db.warriors.put(value)),
+  removeWarrior:id=>mutate('武将の削除',()=>db.warriors.delete(id)),
+  saveSkill:value=>mutate('戦法の保存',()=>db.skills.put(value)),
+  removeSkill:id=>mutate('戦法の削除',()=>db.skills.delete(id)),
+  saveBattleResult:value=>mutate('Battle Logの保存',()=>db.battleResults.put(value)),
+  replaceAll:value=>mutate('バックアップの復元',()=>db.transaction('rw',db.formations,db.warriors,db.skills,db.battleResults,async()=>{await Promise.all([db.formations.clear(),db.warriors.clear(),db.skills.clear(),db.battleResults.clear()]);await db.formations.bulkPut(value.formations);await db.warriors.bulkPut(value.warriors);await db.skills.bulkPut(value.skills);await db.battleResults.bulkPut(value.battleResults);})),
+ };
+});
