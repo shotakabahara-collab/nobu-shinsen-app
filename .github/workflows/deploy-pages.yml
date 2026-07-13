@@ -28,6 +28,7 @@ jobs:
           cache: npm
       - uses: actions/configure-pages@v5
       - run: npm ci
+      - run: npm audit --omit=dev
       - run: npm run test:runtime
       - run: npm test
       - run: npm run build
@@ -41,9 +42,9 @@ jobs:
       - name: Verify deployed application and canonical runtime bundle
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-          EXPECTED_BUNDLE_SHA256: 42910f235511f5b54ec84802f072836b40935b7349455d08e36b4d5815ff423b
         run: |
           base="${PAGE_URL%/}/"
+          expected_bundle_sha="$(node -p "require('./canonical/LOCK.json').runtimeBundleSha256")"
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}" -o /tmp/nobu-index.html
           grep -Fq '<title>NOBU Companion</title>' /tmp/nobu-index.html
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}manifest.webmanifest" -o /tmp/nobu-manifest.json
@@ -51,4 +52,4 @@ jobs:
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}runtime-worker.js" -o /tmp/runtime-worker.js
           grep -Fq 'browser_runtime_api' /tmp/runtime-worker.js
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}runtime_bundle_b223.tgz" -o /tmp/runtime_bundle_b223.tgz
-          echo "${EXPECTED_BUNDLE_SHA256}  /tmp/runtime_bundle_b223.tgz" | sha256sum --check --strict
+          echo "${expected_bundle_sha}  /tmp/runtime_bundle_b223.tgz" | sha256sum --check --strict
