@@ -20,7 +20,8 @@ def sha(path:Path)->str:
 
 def build_officer_catalog(stage:Path)->dict:
     engine=stage/'02_ENGINE'
-    previous=os.getcwd()
+    previous=os.getcwd();previous_bytecode=sys.dont_write_bytecode
+    sys.dont_write_bytecode=True
     sys.path.insert(0,str(engine))
     try:
         os.chdir(engine)
@@ -29,6 +30,9 @@ def build_officer_catalog(stage:Path)->dict:
     finally:
         os.chdir(previous)
         sys.path.remove(str(engine))
+        sys.dont_write_bytecode=previous_bytecode
+        for cache in stage.rglob('__pycache__'):shutil.rmtree(cache,ignore_errors=True)
+        for bytecode in stage.rglob('*.pyc'):bytecode.unlink(missing_ok=True)
     officers={}
     for row in rows:
         name=str(row.get('武将名') or '').strip()
