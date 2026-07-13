@@ -37,7 +37,7 @@ test('calculates a reproducible real-data battle through b223 in the browser',as
  await expect(page.getByLabel('自軍')).toHaveValue(backup.formations[0].id);
  await expect(page.getByLabel('敵軍')).toHaveValue(backup.formations[1].id);
  await page.getByRole('button',{name:'10×1で計算'}).click();
- await expect(page.getByRole('status')).toContainText('計算が完了しました',{timeout:170_000});
+ await expect(page.getByText('計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
  await expect(page.getByText('実勝率')).toBeVisible();
  await expect(page.getByText('B223_CANONICAL_PYTHON_VIA_PYODIDE')).toBeVisible();
  await expect(page.getByRole('button',{name:/HP差/})).toBeVisible();
