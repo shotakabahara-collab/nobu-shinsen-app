@@ -1,5 +1,7 @@
 import {expect,test} from '@playwright/test';
 
+test.setTimeout(300_000);
+
 const now='2026-07-13T00:00:00.000Z';
 const warrior=(id:string,name:string,limitBreak:number,equippedSkills:[string,string])=>({
  id,
@@ -50,7 +52,6 @@ const backup={
 };
 
 test('runs the real b223 calculate flow in an iPhone WebKit environment',async({page})=>{
- test.setTimeout(300_000);
  await page.goto('./');
  await expect(page.getByRole('heading',{name:'NOBU Companion'})).toBeVisible();
  expect(await page.evaluate(()=>navigator.userAgent)).toContain('AppleWebKit');

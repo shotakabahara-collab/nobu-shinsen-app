@@ -15,6 +15,9 @@ test('opens on iPhone and exposes install, creation, battle, search and backup f
  await expect(page.getByRole('button',{name:'探索を開始'})).toBeDisabled();
  await page.getByRole('button',{name:'データ'}).click();
  await expect(page.getByRole('region',{name:'PWA実機診断'})).toBeVisible();
+ await expect(page.getByText('物理iPhoneリリース診断 未完了')).toBeVisible();
+ await expect(page.getByRole('button',{name:'オンライン実b223自己診断'})).toBeVisible();
+ await expect(page.getByRole('list',{name:'リリース診断項目'})).toContainText('機内モードで実b223計算');
  await expect(page.getByRole('heading',{name:'武将管理'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'戦法管理'})).toBeVisible();
  await expect(page.getByRole('button',{name:/Export/})).toBeVisible();

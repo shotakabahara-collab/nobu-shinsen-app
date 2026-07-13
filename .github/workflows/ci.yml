@@ -12,12 +12,13 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
+      - name: Install Python runtime dependency
+        run: apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
       - run: npm ci
       - run: npm audit --omit=dev
       - run: npm run build:runtime
@@ -25,12 +26,6 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run test:offline
-      - name: Restore Playwright browser cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
-      - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:e2e
       - if: failure()
         uses: actions/upload-artifact@v4
