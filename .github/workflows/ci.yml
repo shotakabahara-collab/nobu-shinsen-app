@@ -24,15 +24,16 @@ jobs:
       - run: npm run build:runtime
       - run: npm run test:runtime
       - run: npm test
-      - run: npm run build
-      - name: Verify offline assets
-        run: npm run test:offline 2>&1 | tee offline-report.txt
+      - name: Build production application
+        shell: bash
+        run: set -o pipefail; npm run build 2>&1 | tee build-report.txt
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: offline-report
-          path: offline-report.txt
-          if-no-files-found: ignore
+          name: build-report
+          path: build-report.txt
+          if-no-files-found: error
+      - run: npm run test:offline
       - run: npm run test:e2e
       - if: failure()
         uses: actions/upload-artifact@v4
