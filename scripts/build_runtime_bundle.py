@@ -34,7 +34,9 @@ def main()->int:
                     tf.addfile(info,io.BytesIO(data))
             OUT.parent.mkdir(parents=True,exist_ok=True)
             with OUT.open('wb') as target,gzip.GzipFile(filename='',mode='wb',fileobj=target,mtime=0,compresslevel=9) as gz:gz.write(raw.getvalue())
-    manifest={'schemaVersion':1,'canonicalArchiveSha256':LOCK['archiveSha256'],'battleRuntimeSha256':LOCK['battleRuntimeSha256'],'bundleSha256':sha(OUT),'memberCount':len(names)+1,'duplicateMemberCount':0}
+    bundle_sha=sha(OUT)
+    if bundle_sha!=LOCK['runtimeBundleSha256']:raise SystemExit('runtime bundle SHA mismatch')
+    manifest={'schemaVersion':1,'canonicalArchiveSha256':LOCK['archiveSha256'],'battleRuntimeSha256':LOCK['battleRuntimeSha256'],'bundleSha256':bundle_sha,'memberCount':len(names)+1,'duplicateMemberCount':0}
     (ROOT/'public/runtime_bundle_b223.manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     print(json.dumps(manifest,ensure_ascii=False));return 0
 if __name__=='__main__':raise SystemExit(main())
