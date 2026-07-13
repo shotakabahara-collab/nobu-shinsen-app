@@ -4,6 +4,7 @@ export type AutocompleteOption={
  value:string;
  detail?:string;
  keywords?:string[];
+ priority?:number;
 };
 
 type Props={
@@ -47,7 +48,7 @@ export function rankAutocompleteOptions(options:AutocompleteOption[],query:strin
    }
   }
   return {option,rank,position};
- }).filter(result=>Number.isFinite(result.rank)).sort((a,b)=>a.rank-b.rank||a.position-b.position||a.option.value.localeCompare(b.option.value,'ja')).slice(0,Math.max(1,limit)).map(result=>result.option);
+ }).filter(result=>Number.isFinite(result.rank)).sort((a,b)=>a.rank-b.rank||a.position-b.position||(b.option.priority??0)-(a.option.priority??0)||a.option.value.localeCompare(b.option.value,'ja')).slice(0,Math.max(1,limit)).map(result=>result.option);
 }
 
 export function AutocompleteInput({label,value,options,onChange,className='',placeholder,readOnly=false,maxResults=8}:Props){
