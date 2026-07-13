@@ -20,8 +20,8 @@ test('opens on iPhone and exposes install, creation, battle, search and backup f
  await expect(page.getByRole('button',{name:/Import/})).toBeVisible();
 });
 
-test('calculates a reproducible real-data battle through b223 in the browser',async({page})=>{
- test.setTimeout(180_000);
+test('calculates a reproducible real-data battle online and offline through b223',async({page,context})=>{
+ test.setTimeout(300_000);
  const now='2026-07-13T00:00:00.000Z';
  const warrior=(id:string,name:string,limitBreak:number,equippedSkills:[string,string])=>({id,name,limitBreak,inherentSkill:'固有戦法',equippedSkills});
  const backup={schemaVersion:2,exportedAt:now,warriors:[],skills:[],battleResults:[],formations:[
@@ -42,4 +42,15 @@ test('calculates a reproducible real-data battle through b223 in the browser',as
  await expect(page.getByText('実勝率')).toBeVisible();
  await expect(page.getByText('B223_CANONICAL_PYTHON_VIA_PYODIDE')).toBeVisible();
  await expect(page.getByRole('button',{name:/HP差/})).toBeVisible();
+ await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
+ await context.setOffline(true);
+ await page.reload();
+ await expect(page.getByRole('heading',{name:'NOBU Companion'})).toBeVisible();
+ await expect(page.getByRole('status')).toContainText('オフラインで利用中');
+ await page.getByRole('button',{name:'対戦'}).click();
+ await expect(page.getByLabel('自軍')).toHaveValue(backup.formations[0].id);
+ await expect(page.getByLabel('敵軍')).toHaveValue(backup.formations[1].id);
+ await page.getByRole('button',{name:'10×1で計算'}).click();
+ await expect(page.getByText('計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
+ await expect(page.getByText('B223_CANONICAL_PYTHON_VIA_PYODIDE')).toBeVisible();
 });
