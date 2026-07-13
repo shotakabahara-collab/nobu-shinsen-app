@@ -1,0 +1,2 @@
+import type {Formation} from '../domain/schemas';import type {RuntimeFormation} from './contracts';
+export function toRuntimeFormation(value:Formation):RuntimeFormation{return {officers:[value.warriors[0].name,value.warriors[1].name,value.warriors[2].name],awaken:[value.warriors[0].limitBreak,value.warriors[1].limitBreak,value.warriors[2].limitBreak],unit:value.troopType,skills:[...value.warriors[0].equippedSkills,...value.warriors[1].equippedSkills,...value.warriors[2].equippedSkills],fixed_placement:true,ignore_formal_overlap:true};}

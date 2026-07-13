@@ -1,0 +1,1 @@
+import {describe,expect,it} from 'vitest';import {parseImport} from './transfer';describe('parseImport',()=>{it('rejects unknown schema versions',()=>expect(()=>parseImport('{"schemaVersion":2,"exportedAt":"x","formations":[]}')).toThrow());it('rejects invalid JSON',()=>expect(()=>parseImport('{')).toThrow());});

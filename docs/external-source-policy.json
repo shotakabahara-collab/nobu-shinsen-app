@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "game8-nobunaga-shinsen",
+      "name": "Game8 信長の野望 真戦攻略Wiki",
+      "url": "https://game8.jp/nobunaga-shinsen",
+      "classification": "SUPPLEMENTARY_EXTERNAL_EVIDENCE",
+      "verifiedAt": "2026-07-13",
+      "pageLastUpdated": "2026-06-01T11:37:00+09:00",
+      "coverageThrough": "2026-05-31",
+      "updateStatus": "STOPPED",
+      "allowedUses": [
+        "commander identity and displayed attributes cross-check",
+        "skill identity and displayed effect cross-check",
+        "formation and battle rule evidence discovery",
+        "source URL registration for discrepancy review"
+      ],
+      "prohibitedUses": [
+        "automatic mutation of canonical b223 runtime",
+        "silent overwrite of canonical database values",
+        "claiming post-2026-05-31 freshness",
+        "treating rankings or recommendations as runtime facts"
+      ],
+      "conflictPolicy": "QUARANTINE_AND_REVIEW_WITH_GAME_SCREEN_OR_ADDITIONAL_EVIDENCE"
+    }
+  ]
+}

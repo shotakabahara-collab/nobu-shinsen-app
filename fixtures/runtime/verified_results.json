@@ -1,0 +1,52 @@
+{
+  "version": "v1326p15e2b229",
+  "source_runtime": "v1326p15e2b228",
+  "results": [
+    {
+      "candidate_id": "CAV_YAMAMOTO_CURRENT",
+      "candidate": "山本勘助・柴田勝家・柿崎景家 騎馬",
+      "formal_status": "FORMAL_100x3_VERIFIED",
+      "formation": [
+        {
+          "role": "大将",
+          "officer": "山本勘助",
+          "skills": [
+            "一行三昧",
+            "回天転運"
+          ]
+        },
+        {
+          "role": "副将1",
+          "officer": "柴田勝家",
+          "skills": [
+            "会盟の陣",
+            "以戦養戦"
+          ]
+        },
+        {
+          "role": "副将2",
+          "officer": "柿崎景家",
+          "skills": [
+            "乗勝追撃",
+            "縦横馳突"
+          ]
+        }
+      ],
+      "targets": {
+        "YAMAGATA": {
+          "win_rate": 0.5606,
+          "hp_diff": 3827.1,
+          "trials_per_direction": 100,
+          "blocks": 3
+        },
+        "KURODA": {
+          "win_rate": 0.5202,
+          "hp_diff": 559.49,
+          "trials_per_direction": 100,
+          "blocks": 3
+        }
+      },
+      "min_win_rate": 0.5202
+    }
+  ]
+}
