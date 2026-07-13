@@ -14,6 +14,8 @@
 
 Public operations are `calculate`, `search`, and `formal`. TypeScript validates and maps application formations before sending requests to the isolated Web Worker.
 
+The generated `public/runtime_bundle_b223.tgz` SHA-256 is `42910f235511f5b54ec84802f072836b40935b7349455d08e36b4d5815ff423b`. Its build is deterministic and guarded by the canonical archive and battle runtime hashes above.
+
 ## Reproducible fixture
 
 `fixtures/runtime/calculate_request.json` evaluates registered Yamamoto cavalry against Kuroda bow with seed `1326230000`, 2 trials, and 1 block. The locked result is win rate `0.25` and balanced HP difference `-7864.35`.
@@ -22,7 +24,13 @@ Public operations are `calculate`, `search`, and `formal`. TypeScript validates 
 
 - Pyodide execution in iPhone Safari
 - first-install and offline behavior on a physical iPhone
-- Playwright mobile test in this environment (browser binary download is blocked)
+
+## Verified execution
+
+- Python runtime E2E executes reproducible `calculate`, `search`, and `formal` fixtures.
+- Playwright runs the production build at an iPhone viewport, imports a real formation backup, executes b223 through the vendored Pyodide worker, and verifies the result and Battle Log.
+- The production service worker precaches all 11 required application, Pyodide, runtime, manifest, and icon assets; the runtime worker contains no external URL.
+- GitHub Actions runs unit, runtime integrity/E2E, production build, offline, and browser E2E checks.
 
 ## External evidence
 

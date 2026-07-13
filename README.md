@@ -1,19 +1,36 @@
 # NOBU Companion
 
-『信長の野望 真戦』の編成入力と、既存 b223 battle runtime への接続を目的としたモバイル対応Webアプリです。
+『信長の野望 真戦』の編成を管理し、保護された b223 battle runtime で対戦評価と編成探索を行う、iPhone対応PWAです。
 
-## 現在の状態
+## 検証済みの実装
 
-- 実装済み: 型付き編成モデル、IndexedDB、JSON Import/Export、b223保護adapter、calculate/search/formal境界、実勝率表示
-- 未実装: Battle Log UI、探索UI、AI提案、武将・戦法・敵編成の商用品質CRUD
-- 未検証: iPhone Safari実機、Playwright mobile、初回導入後の完全オフライン動作
+- 3武将・凸・固有戦法・装着戦法・兵種・兵種Lvを含む自軍／敵軍編成の作成・編集・削除
+- 武将・所有戦法の管理、IndexedDB永続化、全データのJSON Import / Export
+- b223の `calculate` / `search` / `formal` 境界、実勝率・計算状態・エラー表示
+- Battle Log保存・詳細表示、所有データを使う予算制限付き探索、30×3正式再評価
+- iPhoneセーフエリア・ホーム画面用アイコン・standalone表示・オフラインキャッシュ
+- Vitest、Python runtime E2E、Playwright iPhone viewport E2E、SHA完全性テスト
 
-b223正本は `canonical/` にSHA固定で格納し、adapterは正本外に配置しています。SHAテストに合格しないbundleは生成できません。
+探索結果はb223が評価した予算内の候補であり、大域最適や生成AIによる推論とは表示しません。
 
-## テスト
+## 正本保護
+
+`canonical/NOBU_ONE_v1326p15e2b223.zip` は読み取り専用入力としてSHA-256を固定しています。build時にarchiveと `02_ENGINE/battle_simulator.py` のSHAを照合し、adapterだけを正本の外側から追加します。正本ZIPを書き換える処理はありません。
+
+## 未検証
+
+- iPhone Safari実機でのホーム画面追加、初回導入、機内モード利用
+- Draft PRをマージした後のGitHub Pages公開版
+
+未検証項目は完成・PASS扱いしません。
+
+## 検証コマンド
 
 ```sh
+npm ci
 npm test
 npm run test:runtime
 npm run build
+npm run test:offline
+npm run test:e2e
 ```
