@@ -10,9 +10,9 @@ test('opens on iPhone and exposes install, creation, battle, search and backup f
  expect((await request.get('/nobu-shinsen-app/apple-touch-icon.png')).ok()).toBe(true);
  expect((await request.get('/nobu-shinsen-app/canonical_officer_catalog.json')).ok()).toBe(true);
  await page.getByRole('button',{name:'新規'}).click();
- await page.getByRole('textbox',{name:'大将 武将名'}).fill('松永久秀');
- await expect(page.getByRole('textbox',{name:'大将 固有戦法'})).toHaveValue('梟雄の計');
- await expect(page.getByRole('textbox',{name:'大将 固有戦法'})).toHaveAttribute('readonly');
+ await page.getByLabel('大将 武将名').fill('松永久秀');
+ await expect(page.getByLabel('大将 固有戦法')).toHaveValue('梟雄の計');
+ await expect(page.getByLabel('大将 固有戦法')).toHaveAttribute('readonly');
  await expect(page.getByText('正本DB自動')).toBeVisible();
  await page.getByRole('button',{name:'キャンセル'}).click();
  await page.getByRole('button',{name:'対戦'}).click();
