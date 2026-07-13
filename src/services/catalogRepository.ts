@@ -1,0 +1,2 @@
+import {db} from '../db/database';import {skillRecordSchema,warriorRecordSchema,type SkillRecord,type WarriorRecord} from '../domain/schemas';
+export const catalogRepository={listWarriors:()=>db.warriors.orderBy('name').toArray(),listSkills:()=>db.skills.orderBy('name').toArray(),saveWarrior:async(input:WarriorRecord)=>db.warriors.put(warriorRecordSchema.parse(input)),saveSkill:async(input:SkillRecord)=>db.skills.put(skillRecordSchema.parse(input)),deleteWarrior:(id:string)=>db.warriors.delete(id),deleteSkill:(id:string)=>db.skills.delete(id)};

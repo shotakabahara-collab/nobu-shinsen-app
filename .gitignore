@@ -1,0 +1,17 @@
+node_modules/
+dist/
+public/pyodide/
+public/runtime_bundle_b223.tgz
+public/runtime_bundle_b223.manifest.json
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+vitest.config.js
+vitest.config.d.ts
+playwright.config.js
+playwright.config.d.ts
+__pycache__/
+*.py[cod]

@@ -1,0 +1,15 @@
+{
+  "candidate": {
+    "officers": ["山本勘助", "柴田勝家", "柿崎景家"],
+    "awaken": [2, 1, 2],
+    "unit": "騎馬",
+    "skills": ["一行三昧", "回天転運", "会盟の陣", "以戦養戦", "乗勝追撃", "縦横馳突"],
+    "fixed_placement": true,
+    "ignore_formal_overlap": true
+  },
+  "target": "KURODA",
+  "trials": 2,
+  "blocks": 1,
+  "seed": 1326230000,
+  "include_detail": false
+}
