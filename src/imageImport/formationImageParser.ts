@@ -144,16 +144,20 @@ export function parseFormationImages(
  const assignedSkills:[ImportedField<string>[],ImportedField<string>[],ImportedField<string>[]]=[[],[],[]];
 
  for(const skill of skillMatches){
-  let warriorIndex=0;let bestDistance=Number.POSITIVE_INFINITY;
-  officerMatches.forEach((officer,index)=>{
-   if(assignedSkills[index]!.length>=2)return;
-   const distance=Math.abs(skill.index-officer.index);
-   if(distance<bestDistance){bestDistance=distance;warriorIndex=index;}
-  });
-  if(assignedSkills[warriorIndex]!.length>=2){
+  const preceding=officerMatches.map((officer,index)=>({officer,index})).filter(row=>row.officer.index<=skill.index&&assignedSkills[row.index]!.length<2).sort((a,b)=>b.officer.index-a.officer.index)[0];
+  let warriorIndex=preceding?.index;
+  if(warriorIndex===undefined){
+   let bestDistance=Number.POSITIVE_INFINITY;
+   officerMatches.forEach((officer,index)=>{
+    if(assignedSkills[index]!.length>=2)return;
+    const distance=Math.abs(skill.index-officer.index);
+    if(distance<bestDistance){bestDistance=distance;warriorIndex=index;}
+   });
+  }
+  if(warriorIndex===undefined||assignedSkills[warriorIndex]!.length>=2){
    const open=assignedSkills.findIndex(values=>values.length<2);if(open>=0)warriorIndex=open;
   }
-  if(warriorIndex<3&&assignedSkills[warriorIndex]!.length<2)assignedSkills[warriorIndex]!.push({value:skill.name,confidence:confidence(skill.score),evidence:skill.evidence});
+  if(warriorIndex!==undefined&&warriorIndex<3&&assignedSkills[warriorIndex]!.length<2)assignedSkills[warriorIndex]!.push({value:skill.name,confidence:confidence(skill.score),evidence:skill.evidence});
  }
 
  const warriors=Array.from({length:3},(_,index):ImportedWarrior=>{
