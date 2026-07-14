@@ -45,7 +45,8 @@ test('opens on iPhone and validates formation skill and troop-level rules',async
  await expect(duplicate).toHaveValue('蓮の');
 
  await page.getByRole('combobox',{name:'兵種',exact:true}).selectOption('騎馬');
- for(const role of ['大将','副将1','副将2'])await page.getByRole('combobox',{name:`${role} 武将名`}).fill('柿崎景家');
+ const uncappedOfficers=['柿崎景家','北条綱成','榊原康政'];
+ for(const [index,role] of ['大将','副将1','副将2'].entries())await page.getByRole('combobox',{name:`${role} 武将名`}).fill(uncappedOfficers[index]!);
  await expect(troopLevel).toHaveValue('14');
  await expect(page.getByLabel('兵種Lv計算根拠')).toContainText('上限解放済み・天井なし');
  await expect(page.getByLabel('兵種Lv計算根拠')).not.toContainText('上限11');
