@@ -1,8 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {calculateTroopLevel,findDuplicateEquippedSkill} from './formationRules';
 
-const emptySkills=['',''] as const;
-
 describe('findDuplicateEquippedSkill',()=>{
  it('finds a duplicate across different officers and normalizes full-width text',()=>{
   const result=findDuplicateEquippedSkill([
@@ -29,31 +27,27 @@ describe('calculateTroopLevel',()=>{
  ];
 
  it('starts at barracks level 5 and adds traits unlocked by current limit break',()=>{
-  const result=calculateTroopLevel('鉄砲',[
-   {name:'松永久秀',limitBreak:2,equippedSkills:emptySkills},
-  ],officers);
+  const result=calculateTroopLevel('鉄砲',[{name:'松永久秀',limitBreak:2}],officers);
   expect(result.level).toBe(5);
   expect(result.sources).toEqual([]);
 
-  const unlocked=calculateTroopLevel('鉄砲',[
-   {name:'松永久秀',limitBreak:3,equippedSkills:emptySkills},
-  ],officers);
+  const unlocked=calculateTroopLevel('鉄砲',[{name:'松永久秀',limitBreak:3}],officers);
   expect(unlocked.level).toBe(8);
   expect(unlocked.sources[0]?.traitName).toBe('砲術Ⅲ');
  });
 
  it('uses the normal cap 10 unless a general trait unlocks cap 11',()=>{
   const normal=calculateTroopLevel('騎馬',[
-   {name:'山内一豊',limitBreak:0,equippedSkills:emptySkills},
-   {name:'山内一豊',limitBreak:0,equippedSkills:emptySkills},
-   {name:'山内一豊',limitBreak:0,equippedSkills:emptySkills},
+   {name:'山内一豊',limitBreak:0},
+   {name:'山内一豊',limitBreak:0},
+   {name:'山内一豊',limitBreak:0},
   ],officers);
   expect(normal.level).toBe(10);
   expect(normal.cap).toBe(10);
 
   const general=calculateTroopLevel('騎馬',[
-   {name:'柿崎景家',limitBreak:0,equippedSkills:emptySkills},
-   {name:'柿崎景家',limitBreak:0,equippedSkills:emptySkills},
+   {name:'柿崎景家',limitBreak:0},
+   {name:'柿崎景家',limitBreak:0},
   ],officers);
   expect(general.level).toBe(11);
   expect(general.cap).toBe(11);
