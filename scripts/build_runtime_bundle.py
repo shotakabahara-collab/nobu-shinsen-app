@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import gzip, hashlib, io, json, os, shutil, sys, tarfile, tempfile, zipfile
+import gzip, hashlib, io, json, os, re, shutil, sys, tarfile, tempfile, zipfile
 from pathlib import Path
 from canonical_archive import canonical_archive_bytes
 
@@ -10,6 +10,7 @@ ARCHIVE=ROOT/'canonical'/LOCK['archive']
 OUT=ROOT/'public/runtime_bundle_b223.tgz'
 OFFICER_CATALOG_OUT=ROOT/'public/canonical_officer_catalog.json'
 SKILL_CATALOG_OUT=ROOT/'public/canonical_skill_catalog.json'
+UNIT_TYPES={'足軽','騎馬','鉄砲','弓'}
 
 
 def sha(path:Path)->str:
@@ -42,7 +43,18 @@ def write_catalog(path:Path,payload:dict)->dict:
     return payload
 
 
-def build_officer_catalog(rows:list[dict])->dict:
+def as_int(value)->int:
+    try:return int(float(str(value or '0').strip()))
+    except (TypeError,ValueError):return 0
+
+
+def unlocked_at(value)->int:
+    match=re.search(r'(\d+)凸',str(value or ''))
+    if not match:raise SystemExit(f'canonical unit level trait has unknown unlock stage: {value!r}')
+    return int(match.group(1))
+
+
+def build_officer_catalog(rows:list[dict],trait_rows:list[dict])->dict:
     officers={}
     for row in rows:
         name=str(row.get('武将名') or '').strip()
@@ -54,11 +66,39 @@ def build_officer_catalog(rows:list[dict])->dict:
         if current and current!=entry:raise SystemExit(f'canonical officer catalog conflict: {name}: {current} != {entry}')
         officers[name]=entry
     if not officers:raise SystemExit('canonical officer catalog is empty')
+
+    traits_by_officer={}
+    for row in trait_rows:
+        level_bonus=as_int(row.get('兵種Lv加算'))
+        cap_bonus=as_int(row.get('上限解放'))
+        if level_bonus<=0 and cap_bonus<=0:continue
+        officer_id=str(row.get('武将ID') or '').strip()
+        trait_name=str(row.get('特性名') or '').strip()
+        targets=[part.strip() for part in re.split(r'[/／,、]',str(row.get('対象兵種') or '')) if part.strip() in UNIT_TYPES]
+        if not officer_id or not trait_name or not targets:continue
+        trait={
+            'name':trait_name,
+            'unlockedAt':unlocked_at(row.get('開放段階')),
+            'unitTypes':targets,
+            'levelBonus':level_bonus,
+            'capBonus':cap_bonus,
+        }
+        bucket=traits_by_officer.setdefault(officer_id,[])
+        if trait not in bucket:bucket.append(trait)
+
+    for officer in officers.values():
+        officer['unitLevelTraits']=sorted(traits_by_officer.get(officer['id'],[]),key=lambda row:(row['unlockedAt'],row['name'],row['unitTypes']))
+
     return write_catalog(OFFICER_CATALOG_OUT,{
         'schemaVersion':1,
         'canonicalVersion':LOCK['canonicalVersion'],
         'canonicalArchiveSha256':LOCK['archiveSha256'],
-        'sourceFields':{'id':'武将ID','name':'武将名','inherentSkill':'固有戦法名'},
+        'unitLevelRule':{'baseLevel':5,'defaultCap':10,'generalTraitCap':11},
+        'sourceFields':{
+            'id':'武将ID','name':'武将名','inherentSkill':'固有戦法名',
+            'traitName':'特性名','traitUnlock':'開放段階','traitUnitTypes':'対象兵種',
+            'traitLevelBonus':'兵種Lv加算','traitCapBonus':'上限解放',
+        },
         'officerCount':len(officers),
         'officers':sorted(officers.values(),key=lambda row:row['name']),
     })
@@ -98,7 +138,7 @@ def main()->int:
             battle=stage/LOCK['battleRuntimePath']
             if sha(battle)!=LOCK['battleRuntimeSha256']:raise SystemExit('battle runtime SHA mismatch')
             context=load_canonical_context(stage)
-            officer_catalog=build_officer_catalog(context.get('officers',[]))
+            officer_catalog=build_officer_catalog(context.get('officers',[]),context.get('trait_effects',[]))
             skill_catalog=build_skill_catalog(context.get('skills',[]))
             shutil.copy2(ROOT/'runtime/adapter/browser_runtime_api.py',stage/'02_ENGINE/browser_runtime_api.py')
             raw=io.BytesIO()
