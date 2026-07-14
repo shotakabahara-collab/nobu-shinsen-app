@@ -5,7 +5,15 @@ export type UnitLevelTrait={
  unlockedAt:number;
  unitTypes:UnitType[];
  levelBonus:number;
+ capUnlock:boolean;
  capBonus:number;
+};
+
+export type UnitLevelSkillEffect={
+ name:string;
+ unitTypes:UnitType[];
+ levelBonus:number;
+ capUnlock:boolean;
 };
 
 export type OfficerUnitLevelRecord={
@@ -13,9 +21,15 @@ export type OfficerUnitLevelRecord={
  unitLevelTraits?:UnitLevelTrait[];
 };
 
+export type SkillUnitLevelRecord={
+ name:string;
+ unitLevelEffects?:UnitLevelSkillEffect[];
+};
+
 export type FormationWarriorLike={
  name:string;
  limitBreak:number;
+ inherentSkill?:string;
  equippedSkills:readonly string[];
 };
 
@@ -31,20 +45,28 @@ export type DuplicateEquippedSkill={
 };
 
 export type TroopLevelSource={
- officerName:string;
- traitName:string;
- unlockedAt:number;
+ sourceType:'trait'|'skill';
+ sourceName:string;
+ officerName?:string;
+ unlockedAt?:number;
  levelBonus:number;
- capBonus:number;
+ capUnlock:boolean;
 };
 
 export type TroopLevelResult={
  level:number;
- cap:number;
+ cap:number|null;
+ capUnlocked:boolean;
  baseLevel:number;
  bonus:number;
  sources:TroopLevelSource[];
  unknownOfficers:string[];
+};
+
+export type UnitLevelRule={
+ baseLevel?:number;
+ defaultCap?:number;
+ capUnlockMode?:'unbounded';
 };
 
 export function normalizeFormationName(value:string):string{
@@ -71,32 +93,57 @@ export function findDuplicateEquippedSkill(warriors:readonly FormationWarriorLik
 
 export function calculateTroopLevel(
  troopType:UnitType,
- warriors:readonly Pick<FormationWarriorLike,'name'|'limitBreak'>[],
+ warriors:readonly FormationWarriorLike[],
  officers:readonly OfficerUnitLevelRecord[],
- rule:{baseLevel?:number;defaultCap?:number;generalTraitCap?:number}={}
+ skills:readonly SkillUnitLevelRecord[]=[],
+ rule:UnitLevelRule={}
 ):TroopLevelResult{
  const baseLevel=rule.baseLevel??5;
  const defaultCap=rule.defaultCap??10;
- const generalTraitCap=rule.generalTraitCap??11;
- const byName=new Map(officers.map(officer=>[normalizeFormationName(officer.name),officer]));
+ const officerByName=new Map(officers.map(officer=>[normalizeFormationName(officer.name),officer]));
+ const skillByName=new Map(skills.map(skill=>[normalizeFormationName(skill.name),skill]));
  const sources:TroopLevelSource[]=[];
  const unknownOfficers:string[]=[];
+ const activeSkillNames=new Set<string>();
  let bonus=0;
- let cap=defaultCap;
+ let capUnlocked=false;
 
  for(const warrior of warriors){
-  const name=normalizeFormationName(warrior.name);
-  if(!name)continue;
-  const officer=byName.get(name);
-  if(!officer){unknownOfficers.push(name);continue;}
-  for(const trait of officer.unitLevelTraits??[]){
-   if(trait.unlockedAt>warrior.limitBreak||!trait.unitTypes.includes(troopType))continue;
-   if(trait.levelBonus<=0&&trait.capBonus<=0)continue;
-   bonus+=trait.levelBonus;
-   cap=Math.min(generalTraitCap,Math.max(cap,defaultCap+trait.capBonus));
-   sources.push({officerName:name,traitName:trait.name,unlockedAt:trait.unlockedAt,levelBonus:trait.levelBonus,capBonus:trait.capBonus});
+  const officerName=normalizeFormationName(warrior.name);
+  if(officerName){
+   const officer=officerByName.get(officerName);
+   if(!officer)unknownOfficers.push(officerName);
+   else{
+    for(const trait of officer.unitLevelTraits??[]){
+     if(trait.unlockedAt>warrior.limitBreak||!trait.unitTypes.includes(troopType))continue;
+     if(trait.levelBonus<=0&&!trait.capUnlock&&trait.capBonus<=0)continue;
+     bonus+=trait.levelBonus;
+     const unlock=trait.capUnlock||trait.capBonus>0;
+     capUnlocked=capUnlocked||unlock;
+     sources.push({sourceType:'trait',sourceName:trait.name,officerName,unlockedAt:trait.unlockedAt,levelBonus:trait.levelBonus,capUnlock:unlock});
+    }
+   }
+  }
+  for(const rawSkill of [warrior.inherentSkill??'',...warrior.equippedSkills]){
+   const skillName=normalizeFormationName(rawSkill);
+   if(skillName)activeSkillNames.add(skillName);
   }
  }
 
- return {level:Math.min(baseLevel+bonus,cap),cap,baseLevel,bonus,sources,unknownOfficers};
+ for(const skillName of activeSkillNames){
+  const skill=skillByName.get(skillName);
+  if(!skill)continue;
+  for(const effect of skill.unitLevelEffects??[]){
+   if(!effect.unitTypes.includes(troopType))continue;
+   if(effect.levelBonus<=0&&!effect.capUnlock)continue;
+   bonus+=effect.levelBonus;
+   capUnlocked=capUnlocked||effect.capUnlock;
+   sources.push({sourceType:'skill',sourceName:skillName===effect.name?skillName:`${skillName}「${effect.name}」`,levelBonus:effect.levelBonus,capUnlock:effect.capUnlock});
+  }
+ }
+
+ const rawLevel=baseLevel+bonus;
+ const cap=capUnlocked?null:defaultCap;
+ const level=capUnlocked?rawLevel:Math.min(rawLevel,defaultCap);
+ return {level,cap,capUnlocked,baseLevel,bonus,sources,unknownOfficers};
 }
