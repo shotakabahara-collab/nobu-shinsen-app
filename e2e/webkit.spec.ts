@@ -42,5 +42,5 @@ test('runs the real b223 calculate flow in an iPhone WebKit environment',async({
  await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
  await expect(page.getByText('山本騎馬の勝率')).toBeVisible();
  await expect(page.getByText('B223_CANONICAL_PYTHON_VIA_PYODIDE')).toBeVisible();
- await expect(page.getByText(/HP差/)).toBeVisible();
+ await expect(page.getByText(/^HP差 /)).toBeVisible();
 });
