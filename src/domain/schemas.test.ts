@@ -27,6 +27,7 @@ describe('formationSchema',()=>{
   expect(result.success).toBe(false);
   if(!result.success)expect(result.error.issues[0]?.message).toContain('装着戦法');
  });
- it('accepts canonical troop level 11',()=>expect(formationSchema.safeParse({...valid(),troopLevel:11}).success).toBe(true));
+ it('accepts troop levels above eleven when the cap has been unlocked',()=>expect(formationSchema.safeParse({...valid(),troopLevel:14}).success).toBe(true));
+ it('rejects zero or negative troop levels',()=>expect(formationSchema.safeParse({...valid(),troopLevel:0}).success).toBe(false));
  it('rejects non-canonical troop counts at JSON boundaries',()=>expect(formationSchema.safeParse({...valid(),troops:9000}).success).toBe(false));
 });
