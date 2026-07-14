@@ -188,7 +188,7 @@ export function FormationEditor({initial,warriors=[],skills=[],canonicalOfficers
     <label className="col-span-2 text-sm text-slate-400">兵種<select aria-label="兵種" className={field} value={value.troopType} onChange={e=>setValue({...value,troopType:e.target.value as Formation['troopType']})}>{troopTypes.map(type=><option key={type}>{type}</option>)}</select></label>
     <label className="text-sm text-slate-400">兵種Lv<span className="ml-2 text-xs text-emerald-400">凸・戦法・特性から自動</span><input aria-label="兵種Lv" className={`${field} opacity-80`} type="number" min="1" value={troopLevel.level} readOnly/></label>
     <label className="text-sm text-slate-400">兵力<input aria-label="兵力" className={`${field} opacity-75`} type="number" value={10000} readOnly aria-describedby="troops-help"/></label>
-    <p id="troops-help" className="col-span-2 text-xs text-slate-400">b223正式評価仕様に従い、兵力は各武将10,000固定です。</p>
+    <p id="troops-help" className="col-span-2 text-xs text-slate-400">正本準拠の評価仕様に従い、兵力は各武将10,000固定です。</p>
     <p className="col-span-2 rounded-lg bg-slate-950 p-3 text-xs text-emerald-300" aria-label="兵種Lv計算根拠">兵舎Lv{troopLevel.baseLevel}＋{troopLevelDetails}＝兵種Lv{troopLevel.level}（{capDetails}）</p>
     {troopLevel.unknownOfficers.length>0&&<p className="col-span-2 text-xs text-amber-300">未登録武将の兵種特性は未加算：{troopLevel.unknownOfficers.join('、')}</p>}
     <p className="col-span-2 text-xs text-emerald-400">すべての登録編成は、対戦時に編成A・編成Bのどちらにも選択できます。</p>
