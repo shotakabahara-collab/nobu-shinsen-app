@@ -76,3 +76,36 @@ test('matches any two registered formations online and offline regardless of leg
  await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
  await expect(page.getByText('B223_CANONICAL_PYTHON_VIA_PYODIDE')).toBeVisible();
 });
+
+test('shows a Japanese popup instead of a raw Pyodide stack',async({page})=>{
+ const now='2026-07-13T00:00:00.000Z';
+ const warrior=(id:string,name:string,equippedSkills:[string,string])=>({id,name,limitBreak:0,inherentSkill:'固有戦法',equippedSkills});
+ const backup={schemaVersion:2,exportedAt:now,warriors:[],skills:[],battleResults:[],formations:[
+  {id:'30000000-0000-4000-8000-000000000001',name:'検証A',kind:'ally',troopType:'騎馬',troopLevel:10,troops:10000,createdAt:now,updatedAt:now,warriors:[warrior('31000000-0000-4000-8000-000000000001','山本勘助',['一行三昧','回天転運']),warrior('31000000-0000-4000-8000-000000000002','柴田勝家',['会盟の陣','以戦養戦']),warrior('31000000-0000-4000-8000-000000000003','柿崎景家',['乗勝追撃','縦横馳突'])]},
+  {id:'30000000-0000-4000-8000-000000000002',name:'検証B',kind:'enemy',troopType:'弓',troopLevel:10,troops:10000,createdAt:now,updatedAt:now,warriors:[warrior('32000000-0000-4000-8000-000000000001','黒田官兵衛',['七十二の計','紅蓮の炎']),warrior('32000000-0000-4000-8000-000000000002','豊臣秀吉',['三河弓兵隊','嚢沙之計']),warrior('32000000-0000-4000-8000-000000000003','ねね',['罵詈雑言','沈魚落雁'])]}
+ ]};
+
+ await page.addInitScript(()=>{
+  class FailingWorker{
+   onmessage:((event:MessageEvent)=>void)|null=null;
+   onerror:((event:ErrorEvent)=>void)|null=null;
+   onmessageerror:((event:MessageEvent)=>void)|null=null;
+   postMessage(message:{requestId:string}){setTimeout(()=>this.onmessage?.({data:{type:'error',requestId:message.requestId,message:'PythonError',details:'new_error@https://example.test/pyodide.asm.js:10:977 308@wasm-function[308]'}} as MessageEvent),0);}
+   terminate(){}
+  }
+  Object.defineProperty(globalThis,'Worker',{value:FailingWorker,writable:true});
+ });
+ await page.goto('./');
+ await page.getByRole('button',{name:'データ'}).click();
+ await page.locator('input[type="file"]').setInputFiles({name:'runtime-error-e2e.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
+ await page.getByRole('button',{name:'対戦・提案'}).click();
+ await page.getByLabel('編成A').selectOption(backup.formations[0].id);
+ await page.getByLabel('編成B').selectOption(backup.formations[1].id);
+ await page.getByRole('button',{name:'10×1で対戦'}).click();
+ const dialog=page.getByRole('alertdialog');
+ await expect(dialog).toContainText('NOBU-R006');
+ await expect(dialog).toContainText('対戦計算を計算エンジンが完了できませんでした');
+ await expect(dialog).toContainText('対処方法');
+ await expect(dialog).not.toContainText('wasm-function');
+ await expect(page.getByText('new_error@',{exact:false})).toHaveCount(0);
+});

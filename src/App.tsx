@@ -6,10 +6,12 @@ import {CatalogManager} from './components/CatalogManager';
 import {PwaStatus} from './components/PwaStatus';
 import {InstallGuide} from './components/InstallGuide';
 import {PwaDiagnostics} from './components/PwaDiagnostics';
+import {RuntimeErrorDialog} from './components/RuntimeErrorDialog';
 import {useAppStore} from './store/appStore';
 import {createExport,downloadExport,parseImport} from './services/transfer';
 import {toRuntimeFormation} from './runtime/formationAdapter';
 import {RuntimeCancelledError,runtimeClient} from './runtime/runtimeClient';
+import {presentRuntimeError,type RuntimeErrorPresentation,type RuntimeUserOperation} from './runtime/runtimeErrors';
 import type {Formation} from './domain/schemas';
 import type {RuntimeResult} from './runtime/contracts';
 import {buildTargetOptimizationRequest} from './runtime/searchAdapter';
@@ -26,6 +28,7 @@ export default function App(){
  const [page,setPage]=useState<Page>('formations');
  const [editing,setEditing]=useState<Formation|'new'|null>(null);
  const [notice,setNotice]=useState('');
+ const [runtimeError,setRuntimeError]=useState<RuntimeErrorPresentation|null>(null);
  const [running,setRunning]=useState(false);
  const [result,setResult]=useState<RuntimeResult|null>(null);
  const [selectedLog,setSelectedLog]=useState<Record<string,unknown>|null>(null);
@@ -55,6 +58,14 @@ export default function App(){
  useEffect(()=>{setResult(null);},[formationAId,formationBId,formationA?.updatedAt,formationB?.updatedAt]);
  useEffect(()=>{setSearchResult(null);setFormalResult(null);setSelectedRecommendationIndex(0);},[optimizationTargetId,optimizationTarget?.updatedAt]);
 
+ function showRuntimeError(error:unknown,operation:RuntimeUserOperation){
+  if(error instanceof RuntimeCancelledError)return;
+  const presentation=presentRuntimeError(error,operation);
+  if(!presentation)return;
+  setNotice('');
+  setRuntimeError(presentation);
+ }
+
  async function importFile(file?:File){
   if(!file)return;
   try{
@@ -69,54 +80,55 @@ export default function App(){
  function cancelRuntime(message='処理を中止しました'){
   runtimeClient.cancel();
   setRunning(false);
+  setRuntimeError(null);
   setNotice(message);
  }
 
  async function calculate(){
   if(!formationA||!formationB||formationA.id===formationB.id)return;
-  setRunning(true);setNotice('b223 runtimeを起動中…');
+  setRuntimeError(null);setRunning(true);setNotice('b223 runtimeを起動中…');
   try{
    const value=await runtimeClient.calculate({candidate:toRuntimeFormation(formationA),target:formationB.id,target_spec:toRuntimeFormation(formationB),trials:10,blocks:1,seed:1326230000,include_detail:true});
    if(typeof value.win_rate!=='number')throw new Error('勝率が返されませんでした');
    setResult(value);
    await store.saveBattleResult({id:crypto.randomUUID(),allyId:formationA.id,enemyId:formationB.id,createdAt:new Date().toISOString(),status:'completed',winRate:value.win_rate,hpDiff:typeof value.hp_diff==='number'?value.hp_diff:null,trials:10,blocks:1,runtime:value.runtime,payload:value});
    setNotice(`${formationA.name}と${formationB.name}の計算が完了しました`);
-  }catch(error){if(!(error instanceof RuntimeCancelledError))setNotice(error instanceof Error?error.message:'計算に失敗しました');}
+  }catch(error){showRuntimeError(error,'calculate');}
   finally{setRunning(false);}
  }
 
  async function optimize(){
   if(!optimizationTarget)return;
-  setRunning(true);setFormalResult(null);setSelectedRecommendationIndex(0);setNotice(`${optimizationTarget.name}への最適候補を探索中…`);
+  setRuntimeError(null);setRunning(true);setFormalResult(null);setSelectedRecommendationIndex(0);setNotice(`${optimizationTarget.name}への最適候補を探索中…`);
   try{
    const value=await runtimeClient.search(buildTargetOptimizationRequest(optimizationTarget,store.formations,store.warriors,store.skills));
    setSearchResult(value);
    setNotice('探索が完了しました。評価済み範囲の最適候補を表示します');
-  }catch(error){if(!(error instanceof RuntimeCancelledError))setNotice(error instanceof Error?error.message:'探索に失敗しました');}
+  }catch(error){showRuntimeError(error,'search');}
   finally{setRunning(false);}
  }
 
  async function formalize(){
   if(!optimizationTarget||!selectedRecommendation)return;
-  setRunning(true);setNotice('選択候補を30×3で正式再評価中…');
+  setRuntimeError(null);setRunning(true);setNotice('選択候補を30×3で正式再評価中…');
   try{
    const value=await runtimeClient.formal({candidate:selectedRecommendation.candidate,targets:[{id:optimizationTarget.id,spec:toRuntimeFormation(optimizationTarget)}],trials:30,blocks:3,seed:1326247000});
    setFormalResult(value);
    setNotice('正式再評価が完了しました');
-  }catch(error){if(!(error instanceof RuntimeCancelledError))setNotice(error instanceof Error?error.message:'正式再評価に失敗しました');}
+  }catch(error){showRuntimeError(error,'formal');}
   finally{setRunning(false);}
  }
 
  async function registerRecommendation(){
   if(!optimizationTarget||!selectedRecommendation)return;
-  setRunning(true);setNotice('推奨編成を正本DBと照合して登録中…');
+  setRuntimeError(null);setRunning(true);setNotice('推奨編成を正本DBと照合して登録中…');
   try{
    const [officerCatalog,skillCatalog]=await Promise.all([loadCanonicalOfficerCatalog(),loadCanonicalSkillCatalog()]);
    const formation=recommendationToFormation(selectedRecommendation,optimizationTarget.name,selectedRecommendationIndex,store.formations.map(value=>value.name),officerCatalog.officers,skillCatalog.skills,officerCatalog.unitLevelRule);
    await store.save(formation);
    setFormationAId(formation.id);
    setNotice(`「${formation.name}」を編成登録しました。対戦候補として選択できます`);
-  }catch(error){setNotice(error instanceof Error?error.message:'推奨編成の登録に失敗しました');}
+  }catch(error){showRuntimeError(error,'register');}
   finally{setRunning(false);}
  }
 
@@ -124,6 +136,7 @@ export default function App(){
 
  return <Shell>
   <PwaStatus/><InstallGuide/>
+  {runtimeError&&<RuntimeErrorDialog error={runtimeError} onClose={()=>setRuntimeError(null)} onReload={()=>window.location.reload()}/>} 
   <main className="space-y-4 pb-24">
    {store.error&&<StorageError message={store.error} onClose={store.clearError}/>} 
    {notice&&<p role="status" className="rounded-xl bg-amber-950 p-3 text-sm text-amber-300">{notice}</p>}
