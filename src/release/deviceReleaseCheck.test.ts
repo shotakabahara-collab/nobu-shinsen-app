@@ -21,7 +21,7 @@ describe('physical iPhone release gate',()=>{
  });
 
  it('does not claim success for a non-canonical or incomplete runtime result',()=>{
-  expect(()=>validateDeviceRuntimeResult(result({runtime:'mock'}))).toThrow('canonical b223 runtime');
+  expect(()=>validateDeviceRuntimeResult(result({runtime:'mock'}))).toThrow('正本準拠エンジン');
   expect(()=>validateDeviceRuntimeResult(result({win_rate:undefined}))).toThrow('実勝率');
   expect(()=>validateDeviceRuntimeResult(result({hp_diff:undefined}))).toThrow('HP差');
  });

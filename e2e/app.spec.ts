@@ -3,6 +3,8 @@ import {test,expect} from '@playwright/test';
 test('opens on iPhone and presents generic matchup and optimizer controls',async({page,request})=>{
  await page.goto('./');
  await expect(page.getByRole('heading',{name:'NOBU Companion'})).toBeVisible();
+ await expect(page.getByText('正本準拠シミュレーション',{exact:true})).toBeVisible();
+ await expect(page.locator('body')).not.toContainText(/b223/i);
  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute('content','yes');
  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href','apple-touch-icon.png');
  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href','/nobu-shinsen-app/manifest.webmanifest');
@@ -14,6 +16,8 @@ test('opens on iPhone and presents generic matchup and optimizer controls',async
  await warrior.fill('永久');
  await page.getByRole('option',{name:/松永久秀/}).click();
  await expect(page.getByLabel('大将 固有戦法')).toHaveValue('梟雄の計');
+ await expect(page.getByText('正本準拠の評価仕様に従い、兵力は各武将10,000固定です。')).toBeVisible();
+ await expect(page.locator('body')).not.toContainText(/b223/i);
  await expect(page.getByRole('combobox',{name:'区分'})).toHaveCount(0);
  await page.getByRole('button',{name:'キャンセル'}).click();
 
@@ -28,6 +32,9 @@ test('opens on iPhone and presents generic matchup and optimizer controls',async
 
  await page.getByRole('button',{name:'データ'}).click();
  await expect(page.getByRole('region',{name:'PWA実機診断'})).toBeVisible();
+ await expect(page.getByText('オンラインで正本準拠計算')).toBeVisible();
+ await expect(page.getByRole('button',{name:'オンライン正本準拠診断'})).toBeVisible();
+ await expect(page.locator('body')).not.toContainText(/b223/i);
  await expect(page.getByRole('heading',{name:'武将管理'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'戦法管理'})).toBeVisible();
 });
@@ -62,7 +69,8 @@ test('matches any two registered formations online and offline regardless of leg
  await page.getByRole('button',{name:'10×1で対戦'}).click();
  await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
  await expect(page.getByText('山本騎馬の勝率')).toBeVisible();
- await expect(page.getByText('B223_CANONICAL_PYTHON_VIA_PYODIDE')).toBeVisible();
+ await expect(page.getByText('正本準拠エンジンで計算済み',{exact:true})).toBeVisible();
+ await expect(page.locator('body')).not.toContainText(/b223/i);
  await expect(page.getByText(/山本騎馬 vs 黒田弓/)).toBeVisible();
 
  await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
@@ -74,5 +82,6 @@ test('matches any two registered formations online and offline regardless of leg
  await page.getByLabel('編成B').selectOption(backup.formations[1].id);
  await page.getByRole('button',{name:'10×1で対戦'}).click();
  await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
- await expect(page.getByText('B223_CANONICAL_PYTHON_VIA_PYODIDE')).toBeVisible();
+ await expect(page.getByText('正本準拠エンジンで計算済み',{exact:true})).toBeVisible();
+ await expect(page.locator('body')).not.toContainText(/b223/i);
 });

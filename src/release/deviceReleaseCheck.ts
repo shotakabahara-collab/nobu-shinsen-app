@@ -68,7 +68,7 @@ export const deviceReleaseRequest:CalculateRequest={
 };
 
 export function validateDeviceRuntimeResult(result:RuntimeResult){
- if(result.runtime!=='B223_CANONICAL_PYTHON_VIA_PYODIDE')throw new Error('canonical b223 runtimeを確認できませんでした');
+ if(result.runtime!=='B223_CANONICAL_PYTHON_VIA_PYODIDE')throw new Error('正本準拠エンジンを確認できませんでした');
  if(typeof result.win_rate!=='number'||!Number.isFinite(result.win_rate))throw new Error('実勝率が返されませんでした');
  if(typeof result.hp_diff!=='number'||!Number.isFinite(result.hp_diff))throw new Error('HP差が返されませんでした');
  return result;

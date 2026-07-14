@@ -24,9 +24,11 @@ const backup={
  ],
 };
 
-test('runs the real b223 calculate flow in an iPhone WebKit environment',async({page})=>{
+test('runs the real canonical calculate flow in an iPhone WebKit environment',async({page})=>{
  await page.goto('./');
  await expect(page.getByRole('heading',{name:'NOBU Companion'})).toBeVisible();
+ await expect(page.getByText('正本準拠シミュレーション',{exact:true})).toBeVisible();
+ await expect(page.locator('body')).not.toContainText(/b223/i);
  expect(await page.evaluate(()=>navigator.userAgent)).toContain('AppleWebKit');
  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute('content','yes');
  await expect(page.getByText('iPhoneホーム画面に追加')).toBeVisible();
@@ -41,6 +43,7 @@ test('runs the real b223 calculate flow in an iPhone WebKit environment',async({
  await page.getByRole('button',{name:'10×1で対戦'}).click();
  await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
  await expect(page.getByText('山本騎馬の勝率')).toBeVisible();
- await expect(page.getByText('B223_CANONICAL_PYTHON_VIA_PYODIDE')).toBeVisible();
+ await expect(page.getByText('正本準拠エンジンで計算済み',{exact:true})).toBeVisible();
+ await expect(page.locator('body')).not.toContainText(/b223/i);
  await expect(page.getByText(/^HP差 /)).toBeVisible();
 });

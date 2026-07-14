@@ -11,6 +11,7 @@ import {
  recordDeviceRuntimeEvidence,
  type DeviceRuntimeEvidence,
 } from '../release/deviceReleaseCheck';
+import {ENGINE_DISPLAY_NAME,ENGINE_RESULT_LABEL} from '../domain/engineBrand';
 import {Button} from './ui/button';
 
 const initial:DiagnosticResult={standalone:false,online:navigator.onLine,serviceWorker:false,offlineCache:false,persistedStorage:null};
@@ -20,8 +21,8 @@ const labels={
  serviceWorker:'Service Worker登録',
  offlineCache:'オフライン資産準備',
  storage:'端末ストレージ保持',
- onlineRuntime:'オンラインで実b223計算',
- offlineRuntime:'機内モードで実b223計算',
+ onlineRuntime:'オンラインで正本準拠計算',
+ offlineRuntime:'機内モードで正本準拠計算',
 };
 
 export function PwaDiagnostics(){
@@ -32,10 +33,11 @@ export function PwaDiagnostics(){
  const assessment=useMemo(()=>assessDeviceRelease(value,evidence),[value,evidence]);
  useEffect(()=>{void refresh();const update=()=>void refresh();window.addEventListener('online',update);window.addEventListener('offline',update);return()=>{window.removeEventListener('online',update);window.removeEventListener('offline',update);};},[refresh]);
  async function runSelfTest(){
-  setRunning(true);setMessage(`${navigator.onLine?'オンライン':'オフライン'}でcanonical b223を確認中…`);
+  const connection=navigator.onLine?'オンライン':'オフライン';
+  setRunning(true);setMessage(`${connection}で${ENGINE_DISPLAY_NAME}を確認中…`);
   try{
    const result=await runtimeClient.calculate(deviceReleaseRequest),next=recordDeviceRuntimeEvidence(evidence,result,navigator.onLine);
-   setEvidence(next);localStorage.setItem(DEVICE_RELEASE_STORAGE_KEY,JSON.stringify(next));setMessage(`${navigator.onLine?'オンライン':'オフライン'}実計算に成功しました`);
+   setEvidence(next);localStorage.setItem(DEVICE_RELEASE_STORAGE_KEY,JSON.stringify(next));setMessage(`${connection}実計算に成功しました`);
   }catch(error){
    const next={...evidence,lastError:error instanceof Error?error.message:'実計算に失敗しました'};setEvidence(next);localStorage.setItem(DEVICE_RELEASE_STORAGE_KEY,JSON.stringify(next));setMessage(next.lastError!);
   }finally{setRunning(false);await refresh();}
@@ -52,9 +54,9 @@ export function PwaDiagnostics(){
    <dt className="text-slate-400">ストレージ保持</dt><dd>{value.persistedStorage===true?'永続化済み':value.persistedStorage===false?'ブラウザ管理':'判定非対応'}</dd>
   </dl>
   <ul className="mt-4 space-y-2" aria-label="リリース診断項目">{Object.entries(assessment.checks).map(([key,passed])=><li key={key} className="flex items-center gap-2 text-sm">{passed?<CheckCircle2 className="size-4 text-emerald-400"/>:<Circle className="size-4 text-slate-600"/>}<span>{labels[key as keyof typeof labels]}</span></li>)}</ul>
-  {evidence.lastRuntime&&<div className="mt-3 rounded-xl bg-slate-950 p-3 text-xs text-slate-400"><p>{evidence.lastRuntime}</p><p>実勝率 {evidence.lastWinRate===null?'—':`${(evidence.lastWinRate*100).toFixed(1)}%`} / HP差 {evidence.lastHpDiff?.toFixed(1)??'—'}</p>{evidence.onlinePassedAt&&<p>オンラインPASS {new Date(evidence.onlinePassedAt).toLocaleString('ja-JP')}</p>}{evidence.offlinePassedAt&&<p>オフラインPASS {new Date(evidence.offlinePassedAt).toLocaleString('ja-JP')}</p>}</div>}
+  {evidence.lastRuntime&&<div className="mt-3 rounded-xl bg-slate-950 p-3 text-xs text-slate-400"><p>{ENGINE_RESULT_LABEL}</p><p>実勝率 {evidence.lastWinRate===null?'—':`${(evidence.lastWinRate*100).toFixed(1)}%`} / HP差 {evidence.lastHpDiff?.toFixed(1)??'—'}</p>{evidence.onlinePassedAt&&<p>オンラインPASS {new Date(evidence.onlinePassedAt).toLocaleString('ja-JP')}</p>}{evidence.offlinePassedAt&&<p>オフラインPASS {new Date(evidence.offlinePassedAt).toLocaleString('ja-JP')}</p>}</div>}
   {message&&<p className="mt-3 text-sm text-amber-300">{message}</p>}
-  <Button className="mt-3 w-full" onClick={()=>void runSelfTest()} disabled={loading||running}>{running?<RefreshCw className="mr-2 size-4 animate-spin"/>:<Play className="mr-2 size-4"/>}{navigator.onLine?'オンライン':'オフライン'}実b223自己診断</Button>
+  <Button className="mt-3 w-full" onClick={()=>void runSelfTest()} disabled={loading||running}>{running?<RefreshCw className="mr-2 size-4 animate-spin"/>:<Play className="mr-2 size-4"/>}{navigator.onLine?'オンライン':'オフライン'}正本準拠診断</Button>
   {value.persistedStorage===false&&<Button className="mt-2 w-full" variant="secondary" onClick={()=>void persist()} disabled={loading||running}>データ保持を要求</Button>}
   {(evidence.onlinePassedAt||evidence.offlinePassedAt||evidence.lastError)&&<Button className="mt-2 w-full" variant="secondary" onClick={reset} disabled={running}><RotateCcw className="mr-2 size-4"/>診断履歴をリセット</Button>}
  </section>;

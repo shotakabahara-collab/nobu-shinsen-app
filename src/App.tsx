@@ -17,6 +17,7 @@ import {resolveFormationPair,resolveFormationSelection} from './domain/formation
 import {buildRecommendationReasons,candidateSkillLines,getRankedRecommendations,getSearchScope,recommendationToFormation,type RankedRecommendation} from './domain/recommendation';
 import {loadCanonicalOfficerCatalog} from './services/canonicalOfficerCatalog';
 import {loadCanonicalSkillCatalog} from './services/canonicalSkillCatalog';
+import {ENGINE_DISPLAY_NAME,ENGINE_DISPLAY_SUBTITLE,ENGINE_RESULT_LABEL,toPublicRuntimePayload} from './domain/engineBrand';
 
 type Page='formations'|'battle'|'data';
 
@@ -74,7 +75,7 @@ export default function App(){
 
  async function calculate(){
   if(!formationA||!formationB||formationA.id===formationB.id)return;
-  setRunning(true);setNotice('b223 runtimeを起動中…');
+  setRunning(true);setNotice(`${ENGINE_DISPLAY_NAME}を起動中…`);
   try{
    const value=await runtimeClient.calculate({candidate:toRuntimeFormation(formationA),target:formationB.id,target_spec:toRuntimeFormation(formationB),trials:10,blocks:1,seed:1326230000,include_detail:true});
    if(typeof value.win_rate!=='number')throw new Error('勝率が返されませんでした');
@@ -178,8 +179,8 @@ function RecommendationPanel({recommendations,selectedIndex,onSelect,targetId,sc
  </div>;
 }
 
-function Shell({children}:{children:React.ReactNode}){return <div className="mx-auto min-h-screen max-w-3xl px-4 safe-top safe-bottom"><header className="py-5"><p className="text-xs tracking-[.3em] text-amber-400">SHINSEN TOOLKIT</p><h1 className="text-3xl font-black">NOBU Companion</h1><p className="mt-2 text-sm text-slate-400">b223 canonical runtime</p></header>{children}</div>}
+function Shell({children}:{children:React.ReactNode}){return <div className="mx-auto min-h-screen max-w-3xl px-4 safe-top safe-bottom"><header className="py-5"><p className="text-xs tracking-[.3em] text-amber-400">SHINSEN TOOLKIT</p><h1 className="text-3xl font-black">NOBU Companion</h1><p className="mt-2 text-sm text-slate-400">{ENGINE_DISPLAY_SUBTITLE}</p></header>{children}</div>}
 function StorageError({message,onClose}:{message:string;onClose:()=>void}){return <aside role="alert" className="mb-3 flex items-start justify-between gap-3 rounded-xl bg-red-950 p-3 text-sm text-red-200"><span>{message}</span><Button variant="secondary" onClick={onClose}>閉じる</Button></aside>}
-function ResultCard({result,label}:{result:RuntimeResult;label:string}){return <div className="rounded-xl bg-slate-950 p-4"><p className="text-sm text-slate-400">{label}</p><p className="text-3xl font-black text-amber-400">{typeof result.win_rate==='number'?`${(result.win_rate*100).toFixed(1)}%`:'—'}</p><p className="text-sm text-slate-400">HP差 {typeof result.hp_diff==='number'?result.hp_diff.toFixed(1):'—'}</p><p className="mt-2 text-xs text-slate-500">{result.runtime} / {result.version}</p></div>}
+function ResultCard({result,label}:{result:RuntimeResult;label:string}){return <div className="rounded-xl bg-slate-950 p-4"><p className="text-sm text-slate-400">{label}</p><p className="text-3xl font-black text-amber-400">{typeof result.win_rate==='number'?`${(result.win_rate*100).toFixed(1)}%`:'—'}</p><p className="text-sm text-slate-400">HP差 {typeof result.hp_diff==='number'?result.hp_diff.toFixed(1):'—'}</p><p className="mt-2 text-xs text-slate-500">{ENGINE_RESULT_LABEL}</p></div>}
 function FormalCard({result}:{result:RuntimeResult}){return <div className="rounded-xl border border-amber-700 bg-slate-950 p-4"><p className="font-bold">30×3正式再評価</p><p className="text-3xl font-black text-amber-400">{typeof result.min_win_rate==='number'?`${(result.min_win_rate*100).toFixed(1)}%`:'—'}</p><p className="text-xs text-slate-500">{String(result.verification_level||'')}</p></div>}
-function BattleLog({payload,onClose}:{payload:Record<string,unknown>;onClose:()=>void}){return <section aria-label="Battle Log詳細" className="rounded-xl border border-amber-700 bg-slate-950 p-4"><div className="flex items-center justify-between"><h4 className="font-bold">Battle Log詳細</h4><Button variant="secondary" onClick={onClose}>閉じる</Button></div><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs text-slate-300">{JSON.stringify(payload,null,2)}</pre></section>}
+function BattleLog({payload,onClose}:{payload:Record<string,unknown>;onClose:()=>void}){return <section aria-label="Battle Log詳細" className="rounded-xl border border-amber-700 bg-slate-950 p-4"><div className="flex items-center justify-between"><h4 className="font-bold">Battle Log詳細</h4><Button variant="secondary" onClick={onClose}>閉じる</Button></div><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs text-slate-300">{JSON.stringify(toPublicRuntimePayload(payload),null,2)}</pre></section>}
