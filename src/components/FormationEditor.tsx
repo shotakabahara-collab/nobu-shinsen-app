@@ -4,6 +4,7 @@ import {calculateTroopLevel,findDuplicateEquippedSkill,normalizeFormationName,ty
 import {findCanonicalOfficer,loadCanonicalOfficerCatalog,type CanonicalOfficer} from '../services/canonicalOfficerCatalog';
 import {loadCanonicalSkillCatalog,type CanonicalSkill} from '../services/canonicalSkillCatalog';
 import {AutocompleteInput,type AutocompleteOption} from './ui/AutocompleteInput';
+import {ImageFormationImporter,type ImageFormationImportValue} from './ImageFormationImporter';
 import {Button} from './ui/button';
 
 const roles=['大将','副将1','副将2'] as const;
@@ -147,6 +148,21 @@ export function FormationEditor({initial,warriors=[],skills=[],canonicalOfficers
   setError('');setValue({...value,warriors:next});
  }
 
+ function applyImageImport(imported:ImageFormationImportValue){
+  const next=structuredClone(value);
+  if(imported.troopType)next.troopType=imported.troopType;
+  if(!next.name.trim())next.name='画像読込編成';
+  imported.warriors.slice(0,3).forEach((source,index)=>{
+   const target=next.warriors[index];if(!target)return;
+   if(source.name){const canonical=canonicalByName.get(normalizeFormationName(source.name));target.name=source.name;target.inherentSkill=canonical?.inherentSkill??'未登録';}
+   if(source.limitBreak!==undefined)target.limitBreak=source.limitBreak;
+   source.equippedSkills.forEach((skill,skillIndex)=>{if(skill)target.equippedSkills[skillIndex as 0|1]=skill;});
+  });
+  setError('');setValue(next);
+  const duplicate=findDuplicateEquippedSkill(next.warriors);
+  if(duplicate)setWarning({title:'画像内の装着戦法が重複しています',message:`「${duplicate.name}」は${slotLabel(duplicate.first)}と${slotLabel(duplicate.duplicate)}で重複しています。画像解析結果を確認してください。`});
+ }
+
  async function submit(e:React.FormEvent){
   e.preventDefault();
   for(let warriorIndex=0;warriorIndex<value.warriors.length;warriorIndex++){
@@ -181,6 +197,7 @@ export function FormationEditor({initial,warriors=[],skills=[],canonicalOfficers
  const capDetails=troopLevel.capUnlocked?'上限解放済み・天井なし':`上限${troopLevel.cap}`;
 
  return <form onSubmit={e=>void submit(e)} className="space-y-4">
+  <ImageFormationImporter officers={officerCatalog} skills={skillCatalog} ownedWarriors={warriors} onApply={applyImageImport}/>
   <section className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
    <h2 className="mb-4 text-lg font-bold">編成編集</h2>
    <div className="grid grid-cols-2 gap-3">
