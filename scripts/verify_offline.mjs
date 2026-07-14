@@ -17,8 +17,13 @@ if(/https?:\/\//.test(worker))throw new Error('runtime worker still contains an 
 if(bundleSha!==lock.runtimeBundleSha256)throw new Error(`runtime bundle SHA mismatch: ${bundleSha}`);
 if(officerCatalog.canonicalVersion!==lock.canonicalVersion||officerCatalog.canonicalArchiveSha256!==lock.archiveSha256)throw new Error('canonical officer catalog release lock mismatch');
 if(!Array.isArray(officerCatalog.officers)||officerCatalog.officerCount!==officerCatalog.officers.length)throw new Error('canonical officer catalog is malformed');
+if(officerCatalog.unitLevelRule?.baseLevel!==5||officerCatalog.unitLevelRule?.defaultCap!==10||officerCatalog.unitLevelRule?.generalTraitCap!==11)throw new Error('canonical troop level rule is malformed');
+const officerByName=new Map(officerCatalog.officers.map(officer=>[officer.name,officer]));
+if(!officerByName.get('松永久秀')?.unitLevelTraits?.some(trait=>trait.name==='砲術Ⅲ'&&trait.unlockedAt===3&&trait.levelBonus===3))throw new Error('canonical troop level trait missing: 松永久秀 砲術Ⅲ');
 if(skillCatalog.canonicalVersion!==lock.canonicalVersion||skillCatalog.canonicalArchiveSha256!==lock.archiveSha256)throw new Error('canonical skill catalog release lock mismatch');
 if(!Array.isArray(skillCatalog.skills)||skillCatalog.skillCount!==skillCatalog.skills.length)throw new Error('canonical skill catalog is malformed');
+const skillByName=new Map(skillCatalog.skills.map(skill=>[skill.name,skill]));
+if(skillByName.get('梟雄の計')?.attachable!==false||skillByName.get('紅蓮の炎')?.attachable!==true)throw new Error('canonical skill attachability is malformed');
 if(manifest.display!=='standalone'||manifest.orientation!=='portrait'||manifest.start_url!=='/nobu-shinsen-app/')throw new Error('PWA manifest is not configured for iPhone standalone launch');
 for(const size of ['192x192','512x512'])if(!manifest.icons?.some(icon=>icon.sizes===size&&icon.type==='image/png'))throw new Error(`PWA manifest missing PNG icon: ${size}`);
-console.log(`offline precache verified: ${required.length} required assets; ${officerCatalog.officerCount} canonical officers; ${skillCatalog.skillCount} canonical skills; runtime bundle ${bundleSha}`);
+console.log(`offline precache verified: ${required.length} required assets; ${officerCatalog.officerCount} canonical officers with troop-level traits; ${skillCatalog.skillCount} canonical skills with attachability; runtime bundle ${bundleSha}`);
