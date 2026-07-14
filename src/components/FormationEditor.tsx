@@ -21,10 +21,10 @@ type Props={
 
 type Warning={title:string;message:string};
 
-export function createEmptyFormation(kind:'ally'|'enemy'='ally'):Formation{
+export function createEmptyFormation():Formation{
  const now=new Date().toISOString();
  const warrior=()=>({id:crypto.randomUUID(),name:'',limitBreak:0,inherentSkill:'未登録',equippedSkills:['',''] as [string,string]});
- return {id:crypto.randomUUID(),name:'',kind,troopType:'騎馬',troopLevel:5,troops:10000,warriors:[warrior(),warrior(),warrior()],createdAt:now,updatedAt:now};
+ return {id:crypto.randomUUID(),name:'',kind:'ally',troopType:'騎馬',troopLevel:5,troops:10000,warriors:[warrior(),warrior(),warrior()],createdAt:now,updatedAt:now};
 }
 
 function slotLabel(location:EquippedSkillLocation):string{
@@ -160,6 +160,7 @@ export function FormationEditor({initial,warriors=[],skills=[],canonicalOfficers
   if(duplicate){setWarning({title:'装着戦法が重複しています',message:`「${duplicate.name}」は${slotLabel(duplicate.first)}と${slotLabel(duplicate.duplicate)}で重複しています。修正するまで保存できません。`});return;}
   const normalized={
    ...value,
+   kind:'ally' as const,
    troopLevel:troopLevel.level,
    warriors:value.warriors.map(warrior=>{
     const match=canonicalByName.get(normalizeFormationName(warrior.name));
@@ -184,14 +185,13 @@ export function FormationEditor({initial,warriors=[],skills=[],canonicalOfficers
    <h2 className="mb-4 text-lg font-bold">編成編集</h2>
    <div className="grid grid-cols-2 gap-3">
     <label className="col-span-2 text-sm text-slate-400">編成名<input aria-label="編成名" className={field} value={value.name} onChange={e=>setValue({...value,name:e.target.value})}/></label>
-    <label className="text-sm text-slate-400">区分<select aria-label="区分" className={field} value={value.kind} onChange={e=>setValue({...value,kind:e.target.value as 'ally'|'enemy'})}><option value="ally">自軍</option><option value="enemy">敵軍</option></select></label>
-    <label className="text-sm text-slate-400">兵種<select aria-label="兵種" className={field} value={value.troopType} onChange={e=>setValue({...value,troopType:e.target.value as Formation['troopType']})}>{troopTypes.map(type=><option key={type}>{type}</option>)}</select></label>
+    <label className="col-span-2 text-sm text-slate-400">兵種<select aria-label="兵種" className={field} value={value.troopType} onChange={e=>setValue({...value,troopType:e.target.value as Formation['troopType']})}>{troopTypes.map(type=><option key={type}>{type}</option>)}</select></label>
     <label className="text-sm text-slate-400">兵種Lv<span className="ml-2 text-xs text-emerald-400">凸・戦法・特性から自動</span><input aria-label="兵種Lv" className={`${field} opacity-80`} type="number" min="1" value={troopLevel.level} readOnly/></label>
     <label className="text-sm text-slate-400">兵力<input aria-label="兵力" className={`${field} opacity-75`} type="number" value={10000} readOnly aria-describedby="troops-help"/></label>
     <p id="troops-help" className="col-span-2 text-xs text-slate-400">b223正式評価仕様に従い、兵力は各武将10,000固定です。</p>
     <p className="col-span-2 rounded-lg bg-slate-950 p-3 text-xs text-emerald-300" aria-label="兵種Lv計算根拠">兵舎Lv{troopLevel.baseLevel}＋{troopLevelDetails}＝兵種Lv{troopLevel.level}（{capDetails}）</p>
     {troopLevel.unknownOfficers.length>0&&<p className="col-span-2 text-xs text-amber-300">未登録武将の兵種特性は未加算：{troopLevel.unknownOfficers.join('、')}</p>}
-    <p className="col-span-2 text-xs text-emerald-400">武将名・戦法名は一部を入力すると、正本DB候補から選択できます。</p>
+    <p className="col-span-2 text-xs text-emerald-400">すべての登録編成は、対戦時に編成A・編成Bのどちらにも選択できます。</p>
    </div>
   </section>
   {officerCatalogError&&<p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-300">{officerCatalogError}。未登録武将は固有戦法を手入力できます。</p>}

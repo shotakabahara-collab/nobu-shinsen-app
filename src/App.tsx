@@ -1,35 +1,185 @@
-import {useEffect,useRef,useState} from 'react';
-import {Download,Upload,Trash2,Swords,Square,Plus,Pencil} from 'lucide-react';
-import {Button} from './components/ui/button';import {FormationEditor} from './components/FormationEditor';
+import {useEffect,useMemo,useRef,useState} from 'react';
+import {Download,Upload,Trash2,Swords,Square,Plus,Pencil,Target,Save,CheckCircle2} from 'lucide-react';
+import {Button} from './components/ui/button';
+import {FormationEditor} from './components/FormationEditor';
 import {CatalogManager} from './components/CatalogManager';
 import {PwaStatus} from './components/PwaStatus';
 import {InstallGuide} from './components/InstallGuide';
 import {PwaDiagnostics} from './components/PwaDiagnostics';
-import {useAppStore} from './store/appStore';import {createExport,downloadExport,parseImport} from './services/transfer';import {toRuntimeFormation} from './runtime/formationAdapter';import {RuntimeCancelledError,runtimeClient} from './runtime/runtimeClient';
-import type {Formation} from './domain/schemas';import type {RuntimeResult} from './runtime/contracts';import {buildOwnedSearchRequest} from './runtime/searchAdapter';
-import {resolveFormationSelection} from './domain/formationSelection';
+import {useAppStore} from './store/appStore';
+import {createExport,downloadExport,parseImport} from './services/transfer';
+import {toRuntimeFormation} from './runtime/formationAdapter';
+import {RuntimeCancelledError,runtimeClient} from './runtime/runtimeClient';
+import type {Formation} from './domain/schemas';
+import type {RuntimeResult} from './runtime/contracts';
+import {buildTargetOptimizationRequest} from './runtime/searchAdapter';
+import {resolveFormationPair,resolveFormationSelection} from './domain/formationSelection';
+import {buildRecommendationReasons,candidateSkillLines,getRankedRecommendations,getSearchScope,recommendationToFormation,type RankedRecommendation} from './domain/recommendation';
+import {loadCanonicalOfficerCatalog} from './services/canonicalOfficerCatalog';
+import {loadCanonicalSkillCatalog} from './services/canonicalSkillCatalog';
 
-type Page='formations'|'battle'|'search'|'data';
+type Page='formations'|'battle'|'data';
+
 export default function App(){
- const store=useAppStore(),input=useRef<HTMLInputElement>(null);const [page,setPage]=useState<Page>('formations');const [editing,setEditing]=useState<Formation|'new'|null>(null);const [notice,setNotice]=useState('');const [running,setRunning]=useState(false);const [result,setResult]=useState<RuntimeResult|null>(null);const [selectedLog,setSelectedLog]=useState<Record<string,unknown>|null>(null);const [searchResult,setSearchResult]=useState<RuntimeResult|null>(null);const [formalResult,setFormalResult]=useState<RuntimeResult|null>(null);const [allyId,setAllyId]=useState('');const [enemyId,setEnemyId]=useState('');
- useEffect(()=>{void store.load();},[store.load]);useEffect(()=>{const nextAlly=resolveFormationSelection(store.formations,allyId,'ally'),nextEnemy=resolveFormationSelection(store.formations,enemyId,'enemy');if(nextAlly!==allyId)setAllyId(nextAlly);if(nextEnemy!==enemyId)setEnemyId(nextEnemy);},[store.formations,allyId,enemyId]);
- const ally=store.formations.find(f=>f.id===allyId),enemy=store.formations.find(f=>f.id===enemyId);
- useEffect(()=>{setResult(null);setSearchResult(null);setFormalResult(null);},[allyId,enemyId,ally?.updatedAt,enemy?.updatedAt]);
- async function importFile(file?:File){if(!file)return;try{const value=parseImport(await file.text());const hasData=store.formations.length+store.warriors.length+store.skills.length+store.battleResults.length>0;if(hasData&&!window.confirm('現在の全データをバックアップ内容で置き換えますか？')){setNotice('Importをキャンセルしました');return;}await store.replaceAll(value);setNotice(`バックアップを復元しました（編成${value.formations.length}件）`);}catch{setNotice('形式が正しくないため読み込めません');}}
- async function calculate(){if(!ally||!enemy)return;setRunning(true);setNotice('b223 runtimeを起動中…');try{const value=await runtimeClient.calculate({candidate:toRuntimeFormation(ally),target:enemy.id,target_spec:toRuntimeFormation(enemy),trials:10,blocks:1,seed:1326230000,include_detail:true});if(typeof value.win_rate!=='number')throw new Error('勝率が返されませんでした');setResult(value);await store.saveBattleResult({id:crypto.randomUUID(),allyId:ally.id,enemyId:enemy.id,createdAt:new Date().toISOString(),status:'completed',winRate:value.win_rate,hpDiff:typeof value.hp_diff==='number'?value.hp_diff:null,trials:10,blocks:1,runtime:value.runtime,payload:value});setNotice('計算が完了しました');}catch(e){if(!(e instanceof RuntimeCancelledError))setNotice(e instanceof Error?e.message:'計算に失敗しました');}finally{setRunning(false);}}
- async function search(){if(!ally||!enemy)return;setRunning(true);setFormalResult(null);setNotice('所有武将・戦法から予算制限付き探索を実行中…');try{const value=await runtimeClient.search(buildOwnedSearchRequest(ally,enemy,store.warriors,store.skills));setSearchResult(value);setNotice('探索が完了しました。大域最適の保証はありません');}catch(e){if(!(e instanceof RuntimeCancelledError))setNotice(e instanceof Error?e.message:'探索に失敗しました');}finally{setRunning(false);}}
- async function formalize(){const ranked=searchResult?.ranked;if(!ally||!enemy||!Array.isArray(ranked)||!ranked[0]||typeof ranked[0]!=='object')return;const candidate=(ranked[0] as {candidate:unknown}).candidate;setRunning(true);setNotice('30×3正式再評価中…');try{const value=await runtimeClient.formal({candidate,targets:[{id:enemy.id,spec:toRuntimeFormation(enemy)}],trials:30,blocks:3,seed:1326247000});setFormalResult(value);setNotice('正式再評価が完了しました');}catch(e){if(!(e instanceof RuntimeCancelledError))setNotice(e instanceof Error?e.message:'正式再評価に失敗しました');}finally{setRunning(false);}}
- if(editing)return <Shell>{store.error&&<StorageError message={store.error} onClose={store.clearError}/>}<FormationEditor initial={editing==='new'?undefined:editing} warriors={store.warriors} skills={store.skills} onCancel={()=>setEditing(null)} onSave={async value=>{try{await store.save(value);setEditing(null);setNotice('編成を保存しました');}catch{/* store error remains visible and the editor stays open */}}}/></Shell>;
- return <Shell><PwaStatus/><InstallGuide/><main className="space-y-4 pb-24">{store.error&&<StorageError message={store.error} onClose={store.clearError}/>} {notice&&<p role="status" className="rounded-xl bg-amber-950 p-3 text-sm text-amber-300">{notice}</p>}
- {page==='formations'&&<><div className="flex items-center justify-between"><h2 className="text-xl font-bold">編成</h2><Button onClick={()=>setEditing('new')}><Plus className="mr-2 size-4"/>新規</Button></div>{store.loading&&<p>読込中...</p>}{!store.loading&&!store.formations.length&&<p className="rounded-2xl border border-slate-700 bg-slate-900 py-12 text-center text-slate-500">編成を登録してください</p>}{store.formations.map(f=><article key={f.id} className="flex items-center justify-between rounded-2xl border border-slate-700 bg-slate-900 p-4"><div><strong>{f.name}</strong><p className="text-xs text-slate-400">{f.kind==='enemy'?'敵軍':'自軍'}・{f.troopType} Lv{f.troopLevel}・兵力{f.troops}</p></div><div className="flex gap-2"><Button aria-label={`${f.name}を編集`} variant="secondary" onClick={()=>setEditing(f)}><Pencil className="size-4"/></Button><Button aria-label={`${f.name}を削除`} variant="danger" onClick={()=>{if(window.confirm(`${f.name}を削除しますか？`))void store.remove(f.id).catch(()=>{});}}><Trash2 className="size-4"/></Button></div></article>)}</>}
- {page==='battle'&&<><h2 className="text-xl font-bold">対戦</h2><section className="space-y-3 rounded-2xl border border-amber-800 bg-slate-900 p-4"><label className="block text-sm text-slate-400">自軍<select aria-label="自軍" className="mt-1 w-full rounded-lg bg-slate-950 p-3" value={allyId} onChange={e=>setAllyId(e.target.value)}><option value="">選択</option>{store.formations.filter(f=>f.kind==='ally').map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label><label className="block text-sm text-slate-400">敵軍<select aria-label="敵軍" className="mt-1 w-full rounded-lg bg-slate-950 p-3" value={enemyId} onChange={e=>setEnemyId(e.target.value)}><option value="">選択</option>{store.formations.filter(f=>f.kind==='enemy').map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label>{running?<Button variant="danger" className="w-full" onClick={()=>{runtimeClient.cancel();setRunning(false);setNotice('計算を中止しました');}}><Square className="mr-2 size-4"/>中止</Button>:<Button className="w-full" disabled={!ally||!enemy} onClick={()=>void calculate()}><Swords className="mr-2 size-4"/>10×1で計算</Button>}{result&&<ResultCard result={result}/>}</section><h3 className="font-bold">Battle Log</h3>{store.battleResults.slice(0,10).map(x=><button key={x.id} className="w-full rounded-xl bg-slate-900 p-3 text-left" onClick={()=>setSelectedLog(x.payload)}><strong>{(x.winRate*100).toFixed(1)}%</strong><span className="ml-3 text-xs text-slate-400">HP差 {x.hpDiff?.toFixed(1)??'—'}・{new Date(x.createdAt).toLocaleString('ja-JP')}</span></button>)}{selectedLog&&<BattleLog payload={selectedLog} onClose={()=>setSelectedLog(null)}/>}</>}
- {page==='search'&&<><h2 className="text-xl font-bold">探索・提案</h2><section className="space-y-3 rounded-2xl border border-slate-700 bg-slate-900 p-4"><p className="text-sm text-slate-400">対戦タブで選択した自軍を起点に、b223で合法性と勝率を評価します。予算打切り結果を大域最適とは表示しません。</p><p>{ally?.name||'自軍未選択'} → {enemy?.name||'敵軍未選択'}</p>{running?<Button variant="danger" className="w-full" onClick={()=>{runtimeClient.cancel();setRunning(false);}}><Square className="mr-2 size-4"/>中止</Button>:<Button className="w-full" disabled={!ally||!enemy} onClick={()=>void search()}>探索を開始</Button>}{searchResult&&<SearchCard result={searchResult}/>} {searchResult&&!formalResult&&<Button className="w-full" onClick={()=>void formalize()}>上位候補を30×3再評価</Button>}{formalResult&&<FormalCard result={formalResult}/>}</section></>}
- {page==='data'&&<><h2 className="text-xl font-bold">データ</h2><PwaDiagnostics/><CatalogManager warriors={store.warriors} skills={store.skills} onSaveWarrior={store.saveWarrior} onRemoveWarrior={store.removeWarrior} onSaveSkill={store.saveSkill} onRemoveSkill={store.removeSkill}/><section className="rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="mb-3 font-bold">完全バックアップ</h3><div className="grid grid-cols-2 gap-3"><Button onClick={()=>downloadExport(createExport(store.formations,store.warriors,store.skills,store.battleResults))}><Download className="mr-2 size-4"/>Export</Button><Button variant="secondary" onClick={()=>input.current?.click()}><Upload className="mr-2 size-4"/>Import</Button></div><p className="mt-2 text-xs text-slate-500">編成・武将・戦法・Battle Logを一括保存／復元します。</p><input ref={input} className="hidden" type="file" accept="application/json,.json" onChange={e=>void importFile(e.target.files?.[0])}/></section></>}
- </main><nav className="fixed inset-x-0 bottom-0 z-10 mx-auto grid max-w-3xl grid-cols-4 border-t border-slate-700 bg-slate-950/95 p-2 safe-bottom">{([['formations','編成'],['battle','対戦'],['search','探索'],['data','データ']] as const).map(([id,label])=><button key={id} className={`min-h-12 rounded-lg ${page===id?'bg-amber-500 text-slate-950':'text-slate-400'}`} onClick={()=>setPage(id)}>{label}</button>)}</nav></Shell>;
+ const store=useAppStore();
+ const input=useRef<HTMLInputElement>(null);
+ const [page,setPage]=useState<Page>('formations');
+ const [editing,setEditing]=useState<Formation|'new'|null>(null);
+ const [notice,setNotice]=useState('');
+ const [running,setRunning]=useState(false);
+ const [result,setResult]=useState<RuntimeResult|null>(null);
+ const [selectedLog,setSelectedLog]=useState<Record<string,unknown>|null>(null);
+ const [searchResult,setSearchResult]=useState<RuntimeResult|null>(null);
+ const [formalResult,setFormalResult]=useState<RuntimeResult|null>(null);
+ const [formationAId,setFormationAId]=useState('');
+ const [formationBId,setFormationBId]=useState('');
+ const [optimizationTargetId,setOptimizationTargetId]=useState('');
+ const [selectedRecommendationIndex,setSelectedRecommendationIndex]=useState(0);
+
+ useEffect(()=>{void store.load();},[store.load]);
+ useEffect(()=>{
+  const [nextA,nextB]=resolveFormationPair(store.formations,formationAId,formationBId);
+  if(nextA!==formationAId)setFormationAId(nextA);
+  if(nextB!==formationBId)setFormationBId(nextB);
+  const nextTarget=resolveFormationSelection(store.formations,optimizationTargetId);
+  if(nextTarget!==optimizationTargetId)setOptimizationTargetId(nextTarget);
+ },[store.formations,formationAId,formationBId,optimizationTargetId]);
+
+ const formationA=store.formations.find(value=>value.id===formationAId);
+ const formationB=store.formations.find(value=>value.id===formationBId);
+ const optimizationTarget=store.formations.find(value=>value.id===optimizationTargetId);
+ const recommendations=useMemo(()=>getRankedRecommendations(searchResult),[searchResult]);
+ const selectedRecommendation=recommendations[selectedRecommendationIndex]??recommendations[0];
+ const searchScope=useMemo(()=>getSearchScope(searchResult),[searchResult]);
+
+ useEffect(()=>{setResult(null);},[formationAId,formationBId,formationA?.updatedAt,formationB?.updatedAt]);
+ useEffect(()=>{setSearchResult(null);setFormalResult(null);setSelectedRecommendationIndex(0);},[optimizationTargetId,optimizationTarget?.updatedAt]);
+
+ async function importFile(file?:File){
+  if(!file)return;
+  try{
+   const value=parseImport(await file.text());
+   const hasData=store.formations.length+store.warriors.length+store.skills.length+store.battleResults.length>0;
+   if(hasData&&!window.confirm('現在の全データをバックアップ内容で置き換えますか？')){setNotice('Importをキャンセルしました');return;}
+   await store.replaceAll(value);
+   setNotice(`バックアップを復元しました（編成${value.formations.length}件）`);
+  }catch{setNotice('形式が正しくないため読み込めません');}
+ }
+
+ function cancelRuntime(message='処理を中止しました'){
+  runtimeClient.cancel();
+  setRunning(false);
+  setNotice(message);
+ }
+
+ async function calculate(){
+  if(!formationA||!formationB||formationA.id===formationB.id)return;
+  setRunning(true);setNotice('b223 runtimeを起動中…');
+  try{
+   const value=await runtimeClient.calculate({candidate:toRuntimeFormation(formationA),target:formationB.id,target_spec:toRuntimeFormation(formationB),trials:10,blocks:1,seed:1326230000,include_detail:true});
+   if(typeof value.win_rate!=='number')throw new Error('勝率が返されませんでした');
+   setResult(value);
+   await store.saveBattleResult({id:crypto.randomUUID(),allyId:formationA.id,enemyId:formationB.id,createdAt:new Date().toISOString(),status:'completed',winRate:value.win_rate,hpDiff:typeof value.hp_diff==='number'?value.hp_diff:null,trials:10,blocks:1,runtime:value.runtime,payload:value});
+   setNotice(`${formationA.name}と${formationB.name}の計算が完了しました`);
+  }catch(error){if(!(error instanceof RuntimeCancelledError))setNotice(error instanceof Error?error.message:'計算に失敗しました');}
+  finally{setRunning(false);}
+ }
+
+ async function optimize(){
+  if(!optimizationTarget)return;
+  setRunning(true);setFormalResult(null);setSelectedRecommendationIndex(0);setNotice(`${optimizationTarget.name}への最適候補を探索中…`);
+  try{
+   const value=await runtimeClient.search(buildTargetOptimizationRequest(optimizationTarget,store.formations,store.warriors,store.skills));
+   setSearchResult(value);
+   setNotice('探索が完了しました。評価済み範囲の最適候補を表示します');
+  }catch(error){if(!(error instanceof RuntimeCancelledError))setNotice(error instanceof Error?error.message:'探索に失敗しました');}
+  finally{setRunning(false);}
+ }
+
+ async function formalize(){
+  if(!optimizationTarget||!selectedRecommendation)return;
+  setRunning(true);setNotice('選択候補を30×3で正式再評価中…');
+  try{
+   const value=await runtimeClient.formal({candidate:selectedRecommendation.candidate,targets:[{id:optimizationTarget.id,spec:toRuntimeFormation(optimizationTarget)}],trials:30,blocks:3,seed:1326247000});
+   setFormalResult(value);
+   setNotice('正式再評価が完了しました');
+  }catch(error){if(!(error instanceof RuntimeCancelledError))setNotice(error instanceof Error?error.message:'正式再評価に失敗しました');}
+  finally{setRunning(false);}
+ }
+
+ async function registerRecommendation(){
+  if(!optimizationTarget||!selectedRecommendation)return;
+  setRunning(true);setNotice('推奨編成を正本DBと照合して登録中…');
+  try{
+   const [officerCatalog,skillCatalog]=await Promise.all([loadCanonicalOfficerCatalog(),loadCanonicalSkillCatalog()]);
+   const formation=recommendationToFormation(selectedRecommendation,optimizationTarget.name,selectedRecommendationIndex,store.formations.map(value=>value.name),officerCatalog.officers,skillCatalog.skills,officerCatalog.unitLevelRule);
+   await store.save(formation);
+   setFormationAId(formation.id);
+   setNotice(`「${formation.name}」を編成登録しました。対戦候補として選択できます`);
+  }catch(error){setNotice(error instanceof Error?error.message:'推奨編成の登録に失敗しました');}
+  finally{setRunning(false);}
+ }
+
+ if(editing)return <Shell>{store.error&&<StorageError message={store.error} onClose={store.clearError}/>}<FormationEditor initial={editing==='new'?undefined:editing} warriors={store.warriors} skills={store.skills} onCancel={()=>setEditing(null)} onSave={async value=>{try{await store.save(value);setEditing(null);setNotice('編成を保存しました');}catch{/* store error remains visible */}}}/></Shell>;
+
+ return <Shell>
+  <PwaStatus/><InstallGuide/>
+  <main className="space-y-4 pb-24">
+   {store.error&&<StorageError message={store.error} onClose={store.clearError}/>} 
+   {notice&&<p role="status" className="rounded-xl bg-amber-950 p-3 text-sm text-amber-300">{notice}</p>}
+
+   {page==='formations'&&<>
+    <div className="flex items-center justify-between"><h2 className="text-xl font-bold">編成</h2><Button onClick={()=>setEditing('new')}><Plus className="mr-2 size-4"/>新規</Button></div>
+    {store.loading&&<p>読込中...</p>}
+    {!store.loading&&!store.formations.length&&<p className="rounded-2xl border border-slate-700 bg-slate-900 py-12 text-center text-slate-500">編成を登録してください</p>}
+    {store.formations.map(formation=><article key={formation.id} className="flex items-center justify-between rounded-2xl border border-slate-700 bg-slate-900 p-4"><div><strong>{formation.name}</strong><p className="text-xs text-slate-400">{formation.troopType} Lv{formation.troopLevel}・兵力{formation.troops}</p><p className="mt-1 text-xs text-slate-500">{formation.warriors.map(value=>value.name).join('・')}</p></div><div className="flex gap-2"><Button aria-label={`${formation.name}を編集`} variant="secondary" onClick={()=>setEditing(formation)}><Pencil className="size-4"/></Button><Button aria-label={`${formation.name}を削除`} variant="danger" onClick={()=>{if(window.confirm(`${formation.name}を削除しますか？`))void store.remove(formation.id).catch(()=>{});}}><Trash2 className="size-4"/></Button></div></article>)}
+   </>}
+
+   {page==='battle'&&<>
+    <div><h2 className="text-xl font-bold">対戦・最適編成</h2><p className="mt-1 text-sm text-slate-400">登録した編成を自由にぶつけるか、1つの編成を対象に最適候補を探索します。</p></div>
+    <section className="space-y-3 rounded-2xl border border-amber-800 bg-slate-900 p-4">
+     <h3 className="font-bold">登録編成同士を対戦</h3>
+     <label className="block text-sm text-slate-400">編成A<select aria-label="編成A" className="mt-1 w-full rounded-lg bg-slate-950 p-3" value={formationAId} onChange={event=>setFormationAId(event.target.value)}><option value="">選択</option>{store.formations.map(formation=><option key={formation.id} value={formation.id} disabled={formation.id===formationBId}>{formation.name}</option>)}</select></label>
+     <label className="block text-sm text-slate-400">編成B<select aria-label="編成B" className="mt-1 w-full rounded-lg bg-slate-950 p-3" value={formationBId} onChange={event=>setFormationBId(event.target.value)}><option value="">選択</option>{store.formations.map(formation=><option key={formation.id} value={formation.id} disabled={formation.id===formationAId}>{formation.name}</option>)}</select></label>
+     {running?<Button variant="danger" className="w-full" onClick={()=>cancelRuntime('計算を中止しました')}><Square className="mr-2 size-4"/>中止</Button>:<Button className="w-full" disabled={!formationA||!formationB||formationA.id===formationB.id} onClick={()=>void calculate()}><Swords className="mr-2 size-4"/>10×1で対戦</Button>}
+     {result&&<ResultCard result={result} label={`${formationA?.name??'編成A'}の勝率`}/>} 
+    </section>
+
+    <section className="space-y-3 rounded-2xl border border-emerald-800 bg-slate-900 p-4">
+     <div><h3 className="flex items-center font-bold"><Target className="mr-2 size-5 text-emerald-400"/>選択編成への最適候補</h3><p className="mt-1 text-sm text-slate-400">登録編成と所有武将・所有戦法を起点に、対象編成へ最も高い評価を得た候補を提示します。</p></div>
+     <label className="block text-sm text-slate-400">最適化する対象編成<select aria-label="最適化対象" className="mt-1 w-full rounded-lg bg-slate-950 p-3" value={optimizationTargetId} onChange={event=>setOptimizationTargetId(event.target.value)}><option value="">選択</option>{store.formations.map(formation=><option key={formation.id} value={formation.id}>{formation.name}</option>)}</select></label>
+     {running?<Button variant="danger" className="w-full" onClick={()=>cancelRuntime('探索を中止しました')}><Square className="mr-2 size-4"/>中止</Button>:<Button className="w-full" disabled={!optimizationTarget} onClick={()=>void optimize()}>最適編成を探索</Button>}
+     {searchResult&&<RecommendationPanel recommendations={recommendations} selectedIndex={selectedRecommendationIndex} onSelect={index=>{setSelectedRecommendationIndex(index);setFormalResult(null);}} targetId={optimizationTargetId} scope={searchScope}/>} 
+     {selectedRecommendation&&<div className="grid gap-3 sm:grid-cols-2"><Button variant="secondary" disabled={running} onClick={()=>void formalize()}>選択候補を30×3再評価</Button><Button disabled={running} onClick={()=>void registerRecommendation()}><Save className="mr-2 size-4"/>選択候補を編成登録</Button></div>}
+     {formalResult&&<FormalCard result={formalResult}/>} 
+    </section>
+
+    <h3 className="font-bold">Battle Log</h3>
+    {store.battleResults.slice(0,10).map(log=>{const a=store.formations.find(value=>value.id===log.allyId)?.name??'編成A';const b=store.formations.find(value=>value.id===log.enemyId)?.name??'編成B';return <button key={log.id} className="w-full rounded-xl bg-slate-900 p-3 text-left" onClick={()=>setSelectedLog(log.payload)}><strong>{a} vs {b}</strong><span className="ml-3 text-xs text-slate-400">A勝率 {(log.winRate*100).toFixed(1)}%・HP差 {log.hpDiff?.toFixed(1)??'—'}・{new Date(log.createdAt).toLocaleString('ja-JP')}</span></button>;})}
+    {selectedLog&&<BattleLog payload={selectedLog} onClose={()=>setSelectedLog(null)}/>} 
+   </>}
+
+   {page==='data'&&<><h2 className="text-xl font-bold">データ</h2><PwaDiagnostics/><CatalogManager warriors={store.warriors} skills={store.skills} onSaveWarrior={store.saveWarrior} onRemoveWarrior={store.removeWarrior} onSaveSkill={store.saveSkill} onRemoveSkill={store.removeSkill}/><section className="rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="mb-3 font-bold">完全バックアップ</h3><div className="grid grid-cols-2 gap-3"><Button onClick={()=>downloadExport(createExport(store.formations,store.warriors,store.skills,store.battleResults))}><Download className="mr-2 size-4"/>Export</Button><Button variant="secondary" onClick={()=>input.current?.click()}><Upload className="mr-2 size-4"/>Import</Button></div><p className="mt-2 text-xs text-slate-500">編成・武将・戦法・Battle Logを一括保存／復元します。</p><input ref={input} className="hidden" type="file" accept="application/json,.json" onChange={event=>void importFile(event.target.files?.[0])}/></section></>}
+  </main>
+  <nav className="fixed inset-x-0 bottom-0 z-10 mx-auto grid max-w-3xl grid-cols-3 border-t border-slate-700 bg-slate-950/95 p-2 safe-bottom">{([['formations','編成'],['battle','対戦・提案'],['data','データ']] as const).map(([id,label])=><button key={id} className={`min-h-12 rounded-lg ${page===id?'bg-amber-500 text-slate-950':'text-slate-400'}`} onClick={()=>setPage(id)}>{label}</button>)}</nav>
+ </Shell>;
 }
+
+function RecommendationPanel({recommendations,selectedIndex,onSelect,targetId,scope}:{recommendations:RankedRecommendation[];selectedIndex:number;onSelect:(index:number)=>void;targetId:string;scope:ReturnType<typeof getSearchScope>}){
+ if(!recommendations.length)return <p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-300">合法な推奨候補を生成できませんでした。登録武将・戦法・編成内容を確認してください。</p>;
+ return <div className="space-y-3" aria-label="最適編成候補">
+  <p className="rounded-lg bg-slate-950 p-3 text-xs text-slate-400">評価 {scope.generated??0}/{scope.budget??0}・{scope.budget_cut?'予算打切り':'設定範囲完了'}。表示順位は評価済み範囲内であり、大域的な絶対最適を保証しません。</p>
+  {recommendations.map((item,index)=>{const selected=index===selectedIndex;const rate=item.win_rates?.[targetId]??item.avg_win_rate??item.min_win_rate;const hp=item.hp_diffs?.[targetId];return <button type="button" key={`${item.candidate.officers.join('-')}-${index}`} aria-pressed={selected} onClick={()=>onSelect(index)} className={`w-full rounded-xl border p-4 text-left ${selected?'border-emerald-400 bg-emerald-950/40':'border-slate-700 bg-slate-950'}`}>
+   <div className="flex items-start justify-between gap-3"><div><p className="font-bold text-emerald-300">候補{index+1} {selected&&<span className="ml-1 text-xs">選択中</span>}</p><p className="mt-1">{item.candidate.officers.join('・')}／{item.candidate.unit}</p></div>{selected&&<CheckCircle2 className="size-5 shrink-0 text-emerald-400"/>}</div>
+   <p className="mt-2 text-sm text-slate-300">計測勝率 {typeof rate==='number'?`${(rate*100).toFixed(1)}%`:'—'}・HP差 {typeof hp==='number'?`${hp>=0?'+':''}${hp.toFixed(1)}`:'—'}</p>
+   <div className="mt-3 space-y-1 text-xs text-slate-400">{candidateSkillLines(item.candidate).map(line=><p key={line}>{line}</p>)}</div>
+   <div className="mt-3 border-t border-slate-700 pt-3"><p className="text-xs font-bold text-amber-300">推奨理由</p><ul className="mt-1 space-y-1 text-xs text-slate-400">{buildRecommendationReasons(item,index,targetId,scope).map(reason=><li key={reason}>・{reason}</li>)}</ul></div>
+  </button>;})}
+ </div>;
+}
+
 function Shell({children}:{children:React.ReactNode}){return <div className="mx-auto min-h-screen max-w-3xl px-4 safe-top safe-bottom"><header className="py-5"><p className="text-xs tracking-[.3em] text-amber-400">SHINSEN TOOLKIT</p><h1 className="text-3xl font-black">NOBU Companion</h1><p className="mt-2 text-sm text-slate-400">b223 canonical runtime</p></header>{children}</div>}
 function StorageError({message,onClose}:{message:string;onClose:()=>void}){return <aside role="alert" className="mb-3 flex items-start justify-between gap-3 rounded-xl bg-red-950 p-3 text-sm text-red-200"><span>{message}</span><Button variant="secondary" onClick={onClose}>閉じる</Button></aside>}
-function ResultCard({result}:{result:RuntimeResult}){return <div className="rounded-xl bg-slate-950 p-4"><p className="text-sm text-slate-400">実勝率</p><p className="text-3xl font-black text-amber-400">{typeof result.win_rate==='number'?`${(result.win_rate*100).toFixed(1)}%`:'—'}</p><p className="text-sm text-slate-400">HP差 {typeof result.hp_diff==='number'?result.hp_diff.toFixed(1):'—'}</p><p className="mt-2 text-xs text-slate-500">{result.runtime} / {result.version}</p></div>}
-function SearchCard({result}:{result:RuntimeResult}){const ranked=Array.isArray(result.ranked)?result.ranked:[],top=ranked[0] as {min_win_rate?:number;avg_win_rate?:number;candidate?:{officers?:string[];unit?:string}}|undefined,scope=result.search_scope as {budget_cut?:boolean;generated?:number;budget?:number}|undefined;return <div className="rounded-xl bg-slate-950 p-4"><p className="font-bold text-amber-400">b223評価による提案</p><p className="mt-2">{top?.candidate?.officers?.join('・')||'合法候補なし'} {top?.candidate?.unit}</p><p className="text-sm text-slate-400">最低勝率 {typeof top?.min_win_rate==='number'?`${(top.min_win_rate*100).toFixed(1)}%`:'—'} / 平均 {typeof top?.avg_win_rate==='number'?`${(top.avg_win_rate*100).toFixed(1)}%`:'—'}</p><p className="mt-2 text-xs text-slate-500">評価 {scope?.generated??0}/{scope?.budget??0}・{scope?.budget_cut?'予算打切り':'設定範囲完了'}・大域最適保証なし</p></div>}
+function ResultCard({result,label}:{result:RuntimeResult;label:string}){return <div className="rounded-xl bg-slate-950 p-4"><p className="text-sm text-slate-400">{label}</p><p className="text-3xl font-black text-amber-400">{typeof result.win_rate==='number'?`${(result.win_rate*100).toFixed(1)}%`:'—'}</p><p className="text-sm text-slate-400">HP差 {typeof result.hp_diff==='number'?result.hp_diff.toFixed(1):'—'}</p><p className="mt-2 text-xs text-slate-500">{result.runtime} / {result.version}</p></div>}
 function FormalCard({result}:{result:RuntimeResult}){return <div className="rounded-xl border border-amber-700 bg-slate-950 p-4"><p className="font-bold">30×3正式再評価</p><p className="text-3xl font-black text-amber-400">{typeof result.min_win_rate==='number'?`${(result.min_win_rate*100).toFixed(1)}%`:'—'}</p><p className="text-xs text-slate-500">{String(result.verification_level||'')}</p></div>}
-function BattleLog({payload,onClose}:{payload:Record<string,unknown>;onClose:()=>void}){return <section aria-label="Battle Log詳細" className="rounded-xl border border-amber-700 bg-slate-950 p-4"><div className="flex items-center justify-between"><h4 className="font-bold text-amber-400">Battle Log詳細</h4><Button variant="secondary" onClick={onClose}>閉じる</Button></div><dl className="mt-3 grid grid-cols-2 gap-2 text-sm"><dt className="text-slate-500">勝率</dt><dd>{typeof payload.win_rate==='number'?`${(payload.win_rate*100).toFixed(1)}%`:'—'}</dd><dt className="text-slate-500">HP差</dt><dd>{typeof payload.hp_diff==='number'?payload.hp_diff.toFixed(1):'—'}</dd><dt className="text-slate-500">runtime</dt><dd>{String(payload.runtime??'—')}</dd><dt className="text-slate-500">version</dt><dd>{String(payload.version??'—')}</dd></dl><details className="mt-3"><summary className="min-h-12 cursor-pointer py-3 text-sm">b223詳細ログ</summary><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black p-3 text-xs">{JSON.stringify(payload.sim??payload.detail??payload,null,2)}</pre></details></section>}
+function BattleLog({payload,onClose}:{payload:Record<string,unknown>;onClose:()=>void}){return <section aria-label="Battle Log詳細" className="rounded-xl border border-amber-700 bg-slate-950 p-4"><div className="flex items-center justify-between"><h4 className="font-bold">Battle Log詳細</h4><Button variant="secondary" onClick={onClose}>閉じる</Button></div><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs text-slate-300">{JSON.stringify(payload,null,2)}</pre></section>}
