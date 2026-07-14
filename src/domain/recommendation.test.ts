@@ -19,9 +19,12 @@ describe('recommendation',()=>{
   const ranked=getRankedRecommendations(result);
   expect(ranked).toHaveLength(1);
   const reasons=buildRecommendationReasons(ranked[0]!,0,'target',result.search_scope as Record<string,unknown>);
-  expect(reasons.join(' ')).toContain('70.0%');
-  expect(reasons.join(' ')).toContain('+123.4');
-  expect(reasons.join(' ')).toContain('大域的な絶対最適を保証');
+  const text=reasons.join(' ');
+  expect(text).toContain('正本準拠エンジン');
+  expect(text).not.toMatch(/b223/i);
+  expect(text).toContain('70.0%');
+  expect(text).toContain('+123.4');
+  expect(text).toContain('大域的な絶対最適を保証');
  });
 
  it('converts the selected recommendation into a valid registered formation',()=>{
