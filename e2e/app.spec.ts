@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 
-test('opens on iPhone and exposes predictive warrior and skill selection',async({page,request})=>{
+test('opens on iPhone and validates formation skill and troop-level rules',async({page,request})=>{
  await page.goto('./');
  await expect(page.getByRole('heading',{name:'NOBU Companion'})).toBeVisible();
  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute('content','yes');
@@ -18,10 +18,30 @@ test('opens on iPhone and exposes predictive warrior and skill selection',async(
  await expect(page.getByLabel('大将 固有戦法')).toHaveValue('梟雄の計');
  await expect(page.getByLabel('大将 固有戦法')).toHaveAttribute('readonly');
  await expect(page.getByText('正本DB自動')).toBeVisible();
+
+ const troopLevel=page.getByRole('spinbutton',{name:'兵種Lv'});
+ await expect(troopLevel).toHaveAttribute('readonly');
+ await page.getByLabel('兵種').selectOption('鉄砲');
+ await page.getByRole('spinbutton',{name:'大将 凸'}).fill('3');
+ await expect(troopLevel).toHaveValue('8');
+ await expect(page.getByLabel('兵種Lv計算根拠')).toContainText('松永久秀「砲術Ⅲ」+3');
+
  const skill=page.getByRole('combobox',{name:'大将 装着戦法1'});
+ await skill.fill('梟雄');
+ await expect(page.getByRole('option',{name:/梟雄の計/})).toHaveCount(0);
  await skill.fill('蓮の');
  await page.getByRole('option',{name:/紅蓮の炎/}).click();
  await expect(skill).toHaveValue('紅蓮の炎');
+
+ const duplicate=page.getByRole('combobox',{name:'副将1 装着戦法2'});
+ await duplicate.fill('蓮の');
+ await page.getByRole('option',{name:/紅蓮の炎/}).click();
+ const warning=page.getByRole('alertdialog');
+ await expect(warning).toContainText('装着戦法が重複しています');
+ await expect(warning).toContainText('大将の装着戦法1');
+ await warning.getByRole('button',{name:'確認'}).click();
+ await expect(duplicate).toHaveValue('蓮の');
+
  await page.getByRole('button',{name:'キャンセル'}).click();
  await page.getByRole('button',{name:'対戦'}).click();
  await expect(page.getByRole('button',{name:'10×1で計算'})).toBeDisabled();
