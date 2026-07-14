@@ -5,12 +5,16 @@ import type {CanonicalSkill} from '../services/canonicalSkillCatalog';
 import {createEmptyFormation,FormationEditor} from './FormationEditor';
 
 const canonical:CanonicalOfficer[]=[
- {id:'WL_MATSU_HISA',name:'松永久秀',inherentSkill:'梟雄の計'},
- {id:'WL_KURODA_KANBEI',name:'黒田官兵衛',inherentSkill:'七十二の計'},
+ {id:'WL_MATSU_HISA',name:'松永久秀',inherentSkill:'梟雄の計',unitLevelTraits:[{name:'砲術Ⅲ',unlockedAt:3,unitTypes:['鉄砲'],levelBonus:3,capBonus:0}]},
+ {id:'WL_KURODA_KANBEI',name:'黒田官兵衛',inherentSkill:'七十二の計',unitLevelTraits:[]},
+ {id:'WL_PALETTE_082',name:'柿崎景家',inherentSkill:'越後二天',unitLevelTraits:[{name:'騎兵大将',unlockedAt:0,unitTypes:['騎馬'],levelBonus:3,capBonus:1}]},
 ];
 const canonicalSkills:CanonicalSkill[]=[
+ {id:'KNY_INHERENT_1',name:'梟雄の計',type:'固有',attachable:false},
+ {id:'KNY_INHERENT_2',name:'七十二の計',type:'固有',attachable:false},
  {id:'KNY_0001',name:'紅蓮の炎',type:'能動',attachable:true},
  {id:'KNY_0002',name:'回天転運',type:'能動',attachable:true},
+ {id:'KNY_0003',name:'一行三昧',type:'能動',attachable:true},
 ];
 
 function editor(props:Partial<React.ComponentProps<typeof FormationEditor>>={}){
@@ -45,6 +49,25 @@ describe('FormationEditor',()=>{
   expect(screen.getByText(/各武将10,000固定/)).toBeVisible();
  });
 
+ it('automatically calculates troop level from troop type, officer and limit break',async()=>{
+  render(editor());
+  const level=screen.getByRole('spinbutton',{name:'兵種Lv'});
+  expect(level).toHaveAttribute('readonly');
+  expect(level).toHaveValue(5);
+  fireEvent.change(screen.getByLabelText('兵種'),{target:{value:'鉄砲'}});
+  fireEvent.change(screen.getByRole('combobox',{name:'大将 武将名'}),{target:{value:'松永久秀'}});
+  fireEvent.change(screen.getByRole('spinbutton',{name:'大将 凸'}),{target:{value:'3'}});
+  await waitFor(()=>expect(level).toHaveValue(8));
+  expect(screen.getByLabelText('兵種Lv計算根拠')).toHaveTextContent('松永久秀「砲術Ⅲ」+3');
+ });
+
+ it('unlocks troop level 11 when a general trait applies',async()=>{
+  render(editor());
+  fireEvent.change(screen.getByRole('combobox',{name:'大将 武将名'}),{target:{value:'柿崎景家'}});
+  await waitFor(()=>expect(screen.getByRole('spinbutton',{name:'兵種Lv'})).toHaveValue(8));
+  expect(screen.getByLabelText('兵種Lv計算根拠')).toHaveTextContent('上限11');
+ });
+
  it('shows partial warrior candidates and selects one to autofill the inherent skill',()=>{
   render(editor());
   const name=screen.getByRole('combobox',{name:'大将 武将名'});
@@ -58,12 +81,49 @@ describe('FormationEditor',()=>{
   expect(screen.getByText('正本DB自動')).toBeVisible();
  });
 
- it('shows partial skill candidates and selects an equipped skill',()=>{
+ it('shows partial attachable skill candidates and selects one',()=>{
   render(editor());
   const skill=screen.getByRole('combobox',{name:'大将 装着戦法1'});
   fireEvent.change(skill,{target:{value:'蓮の'}});
   fireEvent.pointerDown(screen.getByRole('option',{name:/紅蓮の炎/}));
   expect(skill).toHaveValue('紅蓮の炎');
+ });
+
+ it('does not show inherent skills in equipped-skill candidates',()=>{
+  render(editor());
+  const skill=screen.getByRole('combobox',{name:'大将 装着戦法1'});
+  fireEvent.change(skill,{target:{value:'梟雄'}});
+  expect(screen.queryByRole('option',{name:/梟雄の計/})).not.toBeInTheDocument();
+ });
+
+ it('rejects a directly entered inherent skill with a warning popup',()=>{
+  render(editor());
+  const skill=screen.getByRole('combobox',{name:'大将 装着戦法1'});
+  fireEvent.change(skill,{target:{value:'梟雄の計'}});
+  expect(screen.getByRole('alertdialog')).toHaveTextContent('固有戦法');
+  expect(skill).toHaveValue('');
+ });
+
+ it('rejects a duplicate equipped skill immediately and shows a warning popup',()=>{
+  render(editor());
+  const first=screen.getByRole('combobox',{name:'大将 装着戦法1'});
+  const duplicate=screen.getByRole('combobox',{name:'副将1 装着戦法2'});
+  fireEvent.change(first,{target:{value:'紅蓮の炎'}});
+  expect(first).toHaveValue('紅蓮の炎');
+  fireEvent.change(duplicate,{target:{value:'紅蓮の炎'}});
+  expect(screen.getByRole('alertdialog')).toHaveTextContent('装着戦法が重複しています');
+  expect(screen.getByRole('alertdialog')).toHaveTextContent('大将の装着戦法1');
+  expect(duplicate).toHaveValue('');
+ });
+
+ it('blocks saving a legacy formation that already contains duplicate equipped skills',()=>{
+  const value=completeFormation();
+  value.warriors[2].equippedSkills[1]=value.warriors[0].equippedSkills[0];
+  const save=vi.fn();
+  render(editor({initial:value,onSave:save}));
+  fireEvent.click(screen.getByRole('button',{name:'保存'}));
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByRole('alertdialog')).toHaveTextContent('修正するまで保存できません');
  });
 
  it('autofills and locks the inherent skill when a canonical warrior name matches',()=>{
@@ -84,15 +144,20 @@ describe('FormationEditor',()=>{
   expect(inherent).not.toHaveAttribute('readonly');
  });
 
- it('normalizes a stale saved inherent skill from the canonical catalog before saving',async()=>{
+ it('normalizes a stale saved inherent skill and automatic troop level before saving',async()=>{
   const value=completeFormation();
-  value.warriors[0].name='黒田官兵衛';
+  value.troopType='鉄砲';
+  value.troopLevel=10;
+  value.warriors[0].name='松永久秀';
+  value.warriors[0].limitBreak=3;
   value.warriors[0].inherentSkill='誤った固有';
   const save=vi.fn();
   render(editor({initial:value,onSave:save}));
-  await waitFor(()=>expect(screen.getByLabelText('大将 固有戦法')).toHaveValue('七十二の計'));
+  await waitFor(()=>expect(screen.getByLabelText('大将 固有戦法')).toHaveValue('梟雄の計'));
+  await waitFor(()=>expect(screen.getByRole('spinbutton',{name:'兵種Lv'})).toHaveValue(8));
   fireEvent.click(screen.getByRole('button',{name:'保存'}));
   await waitFor(()=>expect(save).toHaveBeenCalledTimes(1));
-  expect(save.mock.calls[0]?.[0].warriors[0].inherentSkill).toBe('七十二の計');
+  expect(save.mock.calls[0]?.[0].warriors[0].inherentSkill).toBe('梟雄の計');
+  expect(save.mock.calls[0]?.[0].troopLevel).toBe(8);
  });
 });
