@@ -31,14 +31,14 @@ class RuntimeIntegrityTest(unittest.TestCase):
   self.assertEqual(catalog['schemaVersion'],1)
   self.assertEqual(catalog['canonicalVersion'],LOCK['canonicalVersion'])
   self.assertEqual(catalog['canonicalArchiveSha256'],LOCK['archiveSha256'])
-  self.assertEqual(catalog['unitLevelRule'],{'baseLevel':5,'defaultCap':10,'generalTraitCap':11})
+  self.assertEqual(catalog['unitLevelRule'],{'baseLevel':5,'defaultCap':10,'capUnlockMode':'unbounded'})
   self.assertEqual(catalog['officerCount'],len(catalog['officers']))
   names=[row['name'] for row in catalog['officers']]
   self.assertEqual(len(names),len(set(names)))
   by_name={row['name']:row for row in catalog['officers']}
   self.assertEqual(by_name['松永久秀']['inherentSkill'],'梟雄の計')
-  self.assertIn({'name':'砲術Ⅲ','unlockedAt':3,'unitTypes':['鉄砲'],'levelBonus':3,'capBonus':0},by_name['松永久秀']['unitLevelTraits'])
-  self.assertIn({'name':'騎兵大将','unlockedAt':0,'unitTypes':['騎馬'],'levelBonus':3,'capBonus':1},by_name['柿崎景家']['unitLevelTraits'])
+  self.assertIn({'name':'砲術Ⅲ','unlockedAt':3,'unitTypes':['鉄砲'],'levelBonus':3,'capUnlock':False,'capBonus':0},by_name['松永久秀']['unitLevelTraits'])
+  self.assertIn({'name':'騎兵大将','unlockedAt':0,'unitTypes':['騎馬'],'levelBonus':3,'capUnlock':True,'capBonus':1},by_name['柿崎景家']['unitLevelTraits'])
 
  def test_generated_skill_catalog_matches_canonical_db(self):
   catalog_bytes=(ROOT/'public/canonical_skill_catalog.json').read_bytes()
@@ -52,6 +52,8 @@ class RuntimeIntegrityTest(unittest.TestCase):
   by_name={row['name']:row for row in catalog['skills']}
   self.assertTrue(by_name['紅蓮の炎']['attachable'])
   self.assertFalse(by_name['梟雄の計']['attachable'])
+  self.assertTrue(all(isinstance(row.get('unitLevelEffects'),list) for row in catalog['skills']))
+  self.assertEqual(by_name['紅蓮の炎']['unitLevelEffects'],[])
 
  def test_bundle_manifest_matches_release_lock(self):
   manifest=json.loads((ROOT/'public/runtime_bundle_b223.manifest.json').read_text())
