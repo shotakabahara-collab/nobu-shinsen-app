@@ -34,12 +34,12 @@ export class RuntimeClient{
    if(!message.requestId)return;
    const pending=this.pending.get(message.requestId);if(!pending)return;
    if(message.type==='result')pending.resolve(message.result!);
-   else if(message.type==='error')pending.reject(notifyRuntimeError(new Error(message.message||'b223 runtimeでエラーが発生しました'),pending.retry));
+   else if(message.type==='error')pending.reject(notifyRuntimeError(new Error(message.message||'計算エンジンでエラーが発生しました'),pending.retry));
    else return;
    this.pending.delete(message.requestId);
   };
-  worker.onerror=event=>this.failAll(new Error(event.message||'b223 runtimeを起動できませんでした'),worker);
-  worker.onmessageerror=()=>this.failAll(new Error('b223 runtimeの応答を読み取れませんでした'),worker);
+  worker.onerror=event=>this.failAll(new Error(event.message||'計算エンジンを起動できませんでした'),worker);
+  worker.onmessageerror=()=>this.failAll(new Error('計算エンジンの応答を読み取れませんでした'),worker);
   this.worker=worker;return worker;
  }
 
