@@ -3,6 +3,7 @@ import {calculateTroopLevel,type UnitLevelRule,type UnitType} from './formationR
 import type {CanonicalOfficer} from '../services/canonicalOfficerCatalog';
 import type {CanonicalSkill} from '../services/canonicalSkillCatalog';
 import type {RuntimeResult} from '../runtime/contracts';
+import {ENGINE_DISPLAY_NAME} from './engineBrand';
 
 export type CandidateSpec={
  officers:[string,string,string];
@@ -93,11 +94,11 @@ export function buildRecommendationReasons(item:RankedRecommendation,index:numbe
  const reasons:string[]=[];
  const targetRate=item.win_rates?.[targetId];
  const measured=typeof targetRate==='number'?targetRate:item.avg_win_rate??item.min_win_rate;
- reasons.push(`b223の対象勝率・平均勝率・構造スコアによる順位付けで、評価済み候補中${index+1}位です。`);
+ reasons.push(`${ENGINE_DISPLAY_NAME}の対象勝率・平均勝率・構造スコアによる順位付けで、評価済み候補中${index+1}位です。`);
  if(typeof measured==='number')reasons.push(`選択した編成に対する計測勝率は${percent(measured)}です。`);
  const hp=item.hp_diffs?.[targetId];
  if(typeof hp==='number')reasons.push(`平均HP差は${hp>=0?'+':''}${hp.toFixed(1)}で、勝敗だけでなく残存兵力差も評価しています。`);
- if(item.formal_status?.startsWith('FORMAL_EVAL_READY'))reasons.push('正本runtimeの合法性確認を通過した候補です。');
+ if(item.formal_status?.startsWith('FORMAL_EVAL_READY'))reasons.push('正本データとの整合性確認を通過した候補です。');
  if(typeof scope.generated==='number')reasons.push(`${scope.generated}件を生成し、${scope.shortlist_simulated??0}件を実戦シミュレーションした範囲から選定しています。`);
  if(scope.budget_cut)reasons.push('探索予算で打ち切っているため、大域的な絶対最適を保証するものではありません。');
  else reasons.push('設定された探索範囲は完走していますが、未登録の武将・戦法は探索対象外です。');
