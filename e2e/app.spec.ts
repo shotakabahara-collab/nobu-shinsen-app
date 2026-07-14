@@ -24,7 +24,7 @@ test('opens on iPhone and presents generic matchup and optimizer controls',async
  await expect(page.getByLabel('最適化対象')).toBeVisible();
  await expect(page.getByRole('button',{name:'10×1で対戦'})).toBeDisabled();
  await expect(page.getByRole('button',{name:'最適編成を探索'})).toBeDisabled();
- await expect(page.getByRole('button',{name:'探索'})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'探索',exact:true})).toHaveCount(0);
 
  await page.getByRole('button',{name:'データ'}).click();
  await expect(page.getByRole('region',{name:'PWA実機診断'})).toBeVisible();
@@ -50,8 +50,10 @@ test('matches any two registered formations online and offline regardless of leg
  await page.getByRole('button',{name:'対戦・提案'}).click();
  const formationA=page.getByLabel('編成A');
  const formationB=page.getByLabel('編成B');
- await expect(formationA.locator('option')).toContainText(['山本騎馬','黒田弓']);
- await expect(formationB.locator('option')).toContainText(['山本騎馬','黒田弓']);
+ await expect(formationA.locator(`option[value="${backup.formations[0].id}"]`)).toHaveText('山本騎馬');
+ await expect(formationA.locator(`option[value="${backup.formations[1].id}"]`)).toHaveText('黒田弓');
+ await expect(formationB.locator(`option[value="${backup.formations[0].id}"]`)).toHaveText('山本騎馬');
+ await expect(formationB.locator(`option[value="${backup.formations[1].id}"]`)).toHaveText('黒田弓');
  await formationA.selectOption(backup.formations[0].id);
  await formationB.selectOption(backup.formations[1].id);
  await page.getByLabel('最適化対象').selectOption(backup.formations[1].id);
@@ -68,8 +70,8 @@ test('matches any two registered formations online and offline regardless of leg
  await page.reload();
  await expect(page.getByText('オフラインで利用中',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'対戦・提案'}).click();
- await formationA.selectOption(backup.formations[0].id);
- await formationB.selectOption(backup.formations[1].id);
+ await page.getByLabel('編成A').selectOption(backup.formations[0].id);
+ await page.getByLabel('編成B').selectOption(backup.formations[1].id);
  await page.getByRole('button',{name:'10×1で対戦'}).click();
  await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
  await expect(page.getByText('B223_CANONICAL_PYTHON_VIA_PYODIDE')).toBeVisible();
