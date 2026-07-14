@@ -24,6 +24,8 @@ describe('findDuplicateEquippedSkill',()=>{
 describe('calculateTroopLevel',()=>{
  const officers=[
   {name:'柿崎景家',unitLevelTraits:[{name:'騎兵大将',unlockedAt:0,unitTypes:['騎馬' as const],levelBonus:3,capUnlock:true,capBonus:1}]},
+  {name:'北条綱成',unitLevelTraits:[{name:'騎兵大将',unlockedAt:0,unitTypes:['騎馬' as const],levelBonus:3,capUnlock:true,capBonus:1}]},
+  {name:'榊原康政',unitLevelTraits:[{name:'馬術Ⅲ',unlockedAt:0,unitTypes:['騎馬' as const],levelBonus:3,capUnlock:false,capBonus:0}]},
   {name:'山内一豊',unitLevelTraits:[{name:'馬術Ⅱ',unlockedAt:0,unitTypes:['騎馬' as const],levelBonus:2,capUnlock:false,capBonus:0}]},
   {name:'松永久秀',unitLevelTraits:[{name:'砲術Ⅲ',unlockedAt:3,unitTypes:['鉄砲' as const],levelBonus:3,capUnlock:false,capBonus:0}]},
  ];
@@ -50,7 +52,7 @@ describe('calculateTroopLevel',()=>{
 
  it('removes the ceiling entirely when a trait unlocks the cap',()=>{
   const general=calculateTroopLevel('騎馬',[
-   warrior('柿崎景家',0),warrior('柿崎景家',0),warrior('柿崎景家',0),
+   warrior('柿崎景家',0),warrior('北条綱成',0),warrior('榊原康政',0),
   ],officers);
   expect(general.level).toBe(14);
   expect(general.cap).toBeNull();
