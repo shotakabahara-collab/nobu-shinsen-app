@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import gzip, hashlib, io, json, os, shutil, sys, tarfile, tempfile, zipfile
+import gzip, hashlib, io, json, os, re, shutil, sys, tarfile, tempfile, zipfile
 from pathlib import Path
 from canonical_archive import canonical_archive_bytes
 
@@ -10,6 +10,7 @@ ARCHIVE=ROOT/'canonical'/LOCK['archive']
 OUT=ROOT/'public/runtime_bundle_b223.tgz'
 OFFICER_CATALOG_OUT=ROOT/'public/canonical_officer_catalog.json'
 SKILL_CATALOG_OUT=ROOT/'public/canonical_skill_catalog.json'
+UNIT_TYPES={'足軽','騎馬','鉄砲','弓'}
 
 
 def sha(path:Path)->str:
@@ -42,7 +43,29 @@ def write_catalog(path:Path,payload:dict)->dict:
     return payload
 
 
-def build_officer_catalog(rows:list[dict])->dict:
+def as_int(value)->int:
+    try:return int(float(str(value or '0').strip()))
+    except (TypeError,ValueError):return 0
+
+
+def as_bool(value)->bool:
+    if isinstance(value,bool):return value
+    return str(value or '').strip().lower() in {'1','true','yes','on','有','あり','解放'} or as_int(value)>0
+
+
+def unit_targets(value)->list[str]:
+    text=str(value or '').strip()
+    if text in {'全兵種','すべて','ALL','all'}:return sorted(UNIT_TYPES)
+    return sorted({part.strip() for part in re.split(r'[/／,、]',text) if part.strip() in UNIT_TYPES})
+
+
+def unlocked_at(value)->int:
+    match=re.search(r'(\d+)凸',str(value or ''))
+    if not match:raise SystemExit(f'canonical unit level trait has unknown unlock stage: {value!r}')
+    return int(match.group(1))
+
+
+def build_officer_catalog(rows:list[dict],trait_rows:list[dict])->dict:
     officers={}
     for row in rows:
         name=str(row.get('武将名') or '').strip()
@@ -54,18 +77,65 @@ def build_officer_catalog(rows:list[dict])->dict:
         if current and current!=entry:raise SystemExit(f'canonical officer catalog conflict: {name}: {current} != {entry}')
         officers[name]=entry
     if not officers:raise SystemExit('canonical officer catalog is empty')
+
+    traits_by_officer={}
+    for row in trait_rows:
+        level_bonus=as_int(row.get('兵種Lv加算'))
+        cap_bonus=as_int(row.get('上限解放'))
+        if level_bonus<=0 and cap_bonus<=0:continue
+        officer_id=str(row.get('武将ID') or '').strip()
+        trait_name=str(row.get('特性名') or '').strip()
+        targets=unit_targets(row.get('対象兵種'))
+        if not officer_id or not trait_name or not targets:continue
+        trait={
+            'name':trait_name,
+            'unlockedAt':unlocked_at(row.get('開放段階')),
+            'unitTypes':targets,
+            'levelBonus':level_bonus,
+            'capUnlock':cap_bonus>0,
+            'capBonus':cap_bonus,
+        }
+        bucket=traits_by_officer.setdefault(officer_id,[])
+        if trait not in bucket:bucket.append(trait)
+
+    for officer in officers.values():
+        officer['unitLevelTraits']=sorted(traits_by_officer.get(officer['id'],[]),key=lambda row:(row['unlockedAt'],row['name'],row['unitTypes']))
+
     return write_catalog(OFFICER_CATALOG_OUT,{
         'schemaVersion':1,
         'canonicalVersion':LOCK['canonicalVersion'],
         'canonicalArchiveSha256':LOCK['archiveSha256'],
-        'sourceFields':{'id':'武将ID','name':'武将名','inherentSkill':'固有戦法名'},
+        'unitLevelRule':{'baseLevel':5,'defaultCap':10,'capUnlockMode':'unbounded'},
+        'sourceFields':{
+            'id':'武将ID','name':'武将名','inherentSkill':'固有戦法名',
+            'traitName':'特性名','traitUnlock':'開放段階','traitUnitTypes':'対象兵種',
+            'traitLevelBonus':'兵種Lv加算','traitCapUnlock':'上限解放',
+        },
         'officerCount':len(officers),
         'officers':sorted(officers.values(),key=lambda row:row['name']),
     })
 
 
-def build_skill_catalog(rows:list[dict])->dict:
+def explicit_skill_unit_effect(row:dict,default_name:str)->dict|None:
+    level_value=row.get('兵種Lv加算') if '兵種Lv加算' in row else row.get('unit_level_bonus')
+    cap_value=row.get('上限解放') if '上限解放' in row else row.get('unit_level_cap_unlock')
+    level_bonus=as_int(level_value)
+    cap_unlock=as_bool(cap_value)
+    if level_bonus<=0 and not cap_unlock:return None
+    target_value=row.get('対象兵種') if '対象兵種' in row else row.get('unit_level_unit_types')
+    targets=unit_targets(target_value)
+    if not targets:raise SystemExit(f'canonical skill unit-level effect has no explicit unit type: {default_name}')
+    return {
+        'name':str(row.get('effect_line_id') or row.get('skill_name') or row.get('戦法名') or default_name).strip() or default_name,
+        'unitTypes':targets,
+        'levelBonus':level_bonus,
+        'capUnlock':cap_unlock,
+    }
+
+
+def build_skill_catalog(rows:list[dict],effect_rows:list[dict])->dict:
     skills={}
+    skill_name_by_id={}
     for row in rows:
         name=str(row.get('skill_name') or '').strip()
         skill_id=str(row.get('canonical_skill_id') or row.get('skill_id') or '').strip()
@@ -73,15 +143,32 @@ def build_skill_catalog(rows:list[dict])->dict:
         attachable=str(row.get('is_attachable') or '').strip().lower()=='true'
         if not name or not skill_id:continue
         current=skills.get(name)
-        entry={'id':skill_id,'name':name,'type':skill_type,'attachable':attachable}
-        if current and current!=entry:raise SystemExit(f'canonical skill catalog conflict: {name}: {current} != {entry}')
-        skills[name]=entry
+        entry={'id':skill_id,'name':name,'type':skill_type,'attachable':attachable,'unitLevelEffects':[]}
+        if current and {k:v for k,v in current.items() if k!='unitLevelEffects'}!={k:v for k,v in entry.items() if k!='unitLevelEffects'}:
+            raise SystemExit(f'canonical skill catalog conflict: {name}: {current} != {entry}')
+        skills[name]=current or entry
+        skill_name_by_id[skill_id]=name
+        effect=explicit_skill_unit_effect(row,name)
+        if effect and effect not in skills[name]['unitLevelEffects']:skills[name]['unitLevelEffects'].append(effect)
+
+    for row in effect_rows:
+        skill_id=str(row.get('skill_id') or row.get('canonical_skill_id') or row.get('戦法ID') or '').strip()
+        name=skill_name_by_id.get(skill_id)
+        if not name:continue
+        effect=explicit_skill_unit_effect(row,name)
+        if effect and effect not in skills[name]['unitLevelEffects']:skills[name]['unitLevelEffects'].append(effect)
+
     if not skills:raise SystemExit('canonical skill catalog is empty')
+    for skill in skills.values():skill['unitLevelEffects']=sorted(skill['unitLevelEffects'],key=lambda row:(row['name'],row['unitTypes']))
     return write_catalog(SKILL_CATALOG_OUT,{
         'schemaVersion':1,
         'canonicalVersion':LOCK['canonicalVersion'],
         'canonicalArchiveSha256':LOCK['archiveSha256'],
-        'sourceFields':{'id':'canonical_skill_id/skill_id','name':'skill_name','type':'skill_type','attachable':'is_attachable'},
+        'sourceFields':{
+            'id':'canonical_skill_id/skill_id','name':'skill_name','type':'skill_type','attachable':'is_attachable',
+            'unitLevelBonus':'兵種Lv加算/unit_level_bonus','unitLevelCapUnlock':'上限解放/unit_level_cap_unlock',
+            'unitLevelUnitTypes':'対象兵種/unit_level_unit_types',
+        },
         'skillCount':len(skills),
         'skills':sorted(skills.values(),key=lambda row:row['name']),
     })
@@ -98,8 +185,8 @@ def main()->int:
             battle=stage/LOCK['battleRuntimePath']
             if sha(battle)!=LOCK['battleRuntimeSha256']:raise SystemExit('battle runtime SHA mismatch')
             context=load_canonical_context(stage)
-            officer_catalog=build_officer_catalog(context.get('officers',[]))
-            skill_catalog=build_skill_catalog(context.get('skills',[]))
+            officer_catalog=build_officer_catalog(context.get('officers',[]),context.get('trait_effects',[]))
+            skill_catalog=build_skill_catalog(context.get('skills',[]),context.get('skill_effects',[]))
             shutil.copy2(ROOT/'runtime/adapter/browser_runtime_api.py',stage/'02_ENGINE/browser_runtime_api.py')
             raw=io.BytesIO()
             with tarfile.open(fileobj=raw,mode='w',format=tarfile.PAX_FORMAT) as tf:
