@@ -19,9 +19,9 @@ test('opens on iPhone and validates formation skill and troop-level rules',async
  await expect(page.getByLabel('大将 固有戦法')).toHaveAttribute('readonly');
  await expect(page.getByText('正本DB自動')).toBeVisible();
 
- const troopLevel=page.getByRole('spinbutton',{name:'兵種Lv'});
+ const troopLevel=page.getByRole('spinbutton',{name:'兵種Lv',exact:true});
  await expect(troopLevel).toHaveAttribute('readonly');
- await page.getByLabel('兵種').selectOption('鉄砲');
+ await page.getByRole('combobox',{name:'兵種',exact:true}).selectOption('鉄砲');
  await page.getByRole('spinbutton',{name:'大将 凸'}).fill('3');
  await expect(troopLevel).toHaveValue('8');
  await expect(page.getByLabel('兵種Lv計算根拠')).toContainText('松永久秀「砲術Ⅲ」+3');
