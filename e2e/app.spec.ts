@@ -21,10 +21,12 @@ test('opens on iPhone and validates formation skill and troop-level rules',async
 
  const troopLevel=page.getByRole('spinbutton',{name:'兵種Lv',exact:true});
  await expect(troopLevel).toHaveAttribute('readonly');
+ await expect(troopLevel).not.toHaveAttribute('max');
  await page.getByRole('combobox',{name:'兵種',exact:true}).selectOption('鉄砲');
  await page.getByRole('spinbutton',{name:'大将 凸'}).fill('3');
  await expect(troopLevel).toHaveValue('8');
  await expect(page.getByLabel('兵種Lv計算根拠')).toContainText('松永久秀「砲術Ⅲ」+3');
+ await expect(page.getByLabel('兵種Lv計算根拠')).toContainText('上限10');
 
  const skill=page.getByRole('combobox',{name:'大将 装着戦法1'});
  await skill.fill('梟雄');
@@ -41,6 +43,12 @@ test('opens on iPhone and validates formation skill and troop-level rules',async
  await expect(warning).toContainText('大将の装着戦法1');
  await warning.getByRole('button',{name:'確認'}).click();
  await expect(duplicate).toHaveValue('蓮の');
+
+ await page.getByRole('combobox',{name:'兵種',exact:true}).selectOption('騎馬');
+ for(const role of ['大将','副将1','副将2'])await page.getByRole('combobox',{name:`${role} 武将名`}).fill('柿崎景家');
+ await expect(troopLevel).toHaveValue('14');
+ await expect(page.getByLabel('兵種Lv計算根拠')).toContainText('上限解放済み・天井なし');
+ await expect(page.getByLabel('兵種Lv計算根拠')).not.toContainText('上限11');
 
  await page.getByRole('button',{name:'キャンセル'}).click();
  await page.getByRole('button',{name:'対戦'}).click();
