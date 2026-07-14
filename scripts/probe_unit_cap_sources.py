@@ -16,7 +16,7 @@ ROOT=Path(__file__).resolve().parents[1]
 LOCK=json.loads((ROOT/'canonical/LOCK.json').read_text(encoding='utf-8'))
 OUT=ROOT/'unit-cap-probe.json'
 KEY_TERMS=('兵種','上限','lv','level','cap','unit')
-VALUE_TERMS=('兵種Lv','兵種レベル','上限解放','上限','unit_level','unit level','cap')
+VALUE_TERMS=('兵種Lv','兵種レベル','上限解放','unit_level','unit level','unit_level_cap','unit level cap')
 
 
 def relevant_mapping(row):
@@ -29,8 +29,16 @@ def compact(row):
     return {str(k):v for k,v in row.items() if any(term.lower() in str(k).lower() for term in KEY_TERMS) or any(term.lower() in str(v).lower() for term in VALUE_TERMS)}
 
 
+def iter_mappings(value,path='root'):
+    if isinstance(value,dict):
+        yield path,value
+        for key,child in value.items():yield from iter_mappings(child,f'{path}.{key}')
+    elif isinstance(value,list):
+        for index,child in enumerate(value):yield from iter_mappings(child,f'{path}[{index}]')
+
+
 archive=canonical_archive_bytes(ROOT,LOCK['archive'],LOCK['archiveSha256'])
-report={'contextKeys':[],'containers':{},'skillRows':[],'traitRows':[],'fileHits':[]}
+report={'contextKeys':[],'containers':{},'skillRows':[],'skillEffectRows':[],'runtimeEffectRows':[],'traitRows':[],'fileHits':[]}
 with zipfile.ZipFile(io.BytesIO(archive)) as z, tempfile.TemporaryDirectory() as td:
     stage=Path(td)/'runtime';z.extractall(stage)
     engine=stage/'02_ENGINE'
@@ -47,16 +55,19 @@ with zipfile.ZipFile(io.BytesIO(archive)) as z, tempfile.TemporaryDirectory() as
 
     report['contextKeys']=sorted(ctx.keys())
     for key,value in ctx.items():
-        if any(term.lower() in key.lower() for term in KEY_TERMS):
-            report['containers'][key]={'type':type(value).__name__,'length':len(value) if hasattr(value,'__len__') else None}
+        report['containers'][key]={'type':type(value).__name__,'length':len(value) if hasattr(value,'__len__') else None}
 
     for row in ctx.get('skills',[]):
-        if relevant_mapping(row):
-            report['skillRows'].append({'name':row.get('skill_name'),'id':row.get('canonical_skill_id') or row.get('skill_id'),'relevant':compact(row),'full':row})
+        if relevant_mapping(row):report['skillRows'].append({'name':row.get('skill_name'),'id':row.get('canonical_skill_id') or row.get('skill_id'),'relevant':compact(row),'full':row})
+
+    for path,row in iter_mappings(ctx.get('skill_effects',[]),'skill_effects'):
+        if relevant_mapping(row):report['skillEffectRows'].append({'path':path,'relevant':compact(row),'full':row})
+
+    for path,row in iter_mappings(ctx.get('runtime_effect_lines_by_skill',{}),'runtime_effect_lines_by_skill'):
+        if relevant_mapping(row):report['runtimeEffectRows'].append({'path':path,'relevant':compact(row),'full':row})
 
     for row in ctx.get('trait_effects',[]):
-        if relevant_mapping(row):
-            report['traitRows'].append({'officerId':row.get('武将ID'),'trait':row.get('特性名'),'relevant':compact(row),'full':row})
+        if relevant_mapping(row):report['traitRows'].append({'officerId':row.get('武将ID'),'trait':row.get('特性名'),'relevant':compact(row),'full':row})
 
     for path in sorted(stage.rglob('*')):
         if not path.is_file() or path.suffix.lower() not in {'.py','.json','.csv','.md','.txt'} or path.stat().st_size>5_000_000:continue
@@ -67,4 +78,4 @@ with zipfile.ZipFile(io.BytesIO(archive)) as z, tempfile.TemporaryDirectory() as
         if hits:report['fileHits'].append({'path':path.relative_to(stage).as_posix(),'hits':hits[:120]})
 
 OUT.write_text(json.dumps(report,ensure_ascii=False,indent=2,default=str)+'\n',encoding='utf-8')
-print(json.dumps({'skillRows':len(report['skillRows']),'traitRows':len(report['traitRows']),'files':len(report['fileHits'])},ensure_ascii=False))
+print(json.dumps({key:len(report[key]) for key in ('skillRows','skillEffectRows','runtimeEffectRows','traitRows','fileHits')},ensure_ascii=False))
