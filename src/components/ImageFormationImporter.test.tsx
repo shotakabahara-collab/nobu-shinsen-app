@@ -31,7 +31,11 @@ describe('ImageFormationImporter',()=>{
   expect(screen.getAllByText('3凸').length).toBeGreaterThan(0);
   fireEvent.click(screen.getByRole('button',{name:'解析結果を編成へ反映'}));
   await waitFor(()=>expect(apply).toHaveBeenCalledTimes(1));
-  expect(apply.mock.calls[0]?.[0]).toMatchObject({troopType:'騎馬',warriors:[{name:'山本勘助',limitBreak:2,equippedSkills:['一行三昧','回天転運']}]});
+  const applied=apply.mock.calls[0]?.[0];
+  expect(applied?.troopType).toBe('騎馬');
+  expect(applied?.warriors[0]).toMatchObject({name:'山本勘助',limitBreak:2,equippedSkills:['一行三昧','回天転運']});
+  expect(applied?.warriors[1]).toMatchObject({name:'柴田勝家',limitBreak:1,equippedSkills:['会盟の陣','以戦養戦']});
+  expect(applied?.warriors[2]).toMatchObject({name:'柿崎景家',limitBreak:3,equippedSkills:['乗勝追撃','縦横馳突']});
  });
 
  it('accepts pasted image clipboard data',()=>{
