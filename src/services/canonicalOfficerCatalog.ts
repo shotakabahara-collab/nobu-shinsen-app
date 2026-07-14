@@ -6,6 +6,7 @@ const unitLevelTraitSchema=z.object({
  unlockedAt:z.number().int().min(0).max(5),
  unitTypes:z.array(unitTypeSchema).min(1),
  levelBonus:z.number().int().min(0),
+ capUnlock:z.boolean().default(false),
  capBonus:z.number().int().min(0),
 });
 const canonicalOfficerSchema=z.object({
@@ -14,12 +15,12 @@ const canonicalOfficerSchema=z.object({
  inherentSkill:z.string().trim().min(1),
  unitLevelTraits:z.array(unitLevelTraitSchema).default([]),
 });
-const unitLevelRuleSchema=z.object({baseLevel:z.literal(5),defaultCap:z.literal(10),generalTraitCap:z.literal(11)});
+const unitLevelRuleSchema=z.object({baseLevel:z.literal(5),defaultCap:z.literal(10),capUnlockMode:z.literal('unbounded')});
 const canonicalOfficerCatalogSchema=z.object({
  schemaVersion:z.literal(1),
  canonicalVersion:z.string().min(1),
  canonicalArchiveSha256:z.string().length(64),
- unitLevelRule:unitLevelRuleSchema.default({baseLevel:5,defaultCap:10,generalTraitCap:11}),
+ unitLevelRule:unitLevelRuleSchema.default({baseLevel:5,defaultCap:10,capUnlockMode:'unbounded'}),
  officerCount:z.number().int().positive(),
  officers:z.array(canonicalOfficerSchema),
 }).superRefine((value,ctx)=>{
