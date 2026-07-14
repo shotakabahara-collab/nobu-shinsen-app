@@ -5,16 +5,16 @@ import type {CanonicalSkill} from '../services/canonicalSkillCatalog';
 import {createEmptyFormation,FormationEditor} from './FormationEditor';
 
 const canonical:CanonicalOfficer[]=[
- {id:'WL_MATSU_HISA',name:'松永久秀',inherentSkill:'梟雄の計',unitLevelTraits:[{name:'砲術Ⅲ',unlockedAt:3,unitTypes:['鉄砲'],levelBonus:3,capBonus:0}]},
+ {id:'WL_MATSU_HISA',name:'松永久秀',inherentSkill:'梟雄の計',unitLevelTraits:[{name:'砲術Ⅲ',unlockedAt:3,unitTypes:['鉄砲'],levelBonus:3,capUnlock:false,capBonus:0}]},
  {id:'WL_KURODA_KANBEI',name:'黒田官兵衛',inherentSkill:'七十二の計',unitLevelTraits:[]},
- {id:'WL_PALETTE_082',name:'柿崎景家',inherentSkill:'越後二天',unitLevelTraits:[{name:'騎兵大将',unlockedAt:0,unitTypes:['騎馬'],levelBonus:3,capBonus:1}]},
+ {id:'WL_PALETTE_082',name:'柿崎景家',inherentSkill:'越後二天',unitLevelTraits:[{name:'騎兵大将',unlockedAt:0,unitTypes:['騎馬'],levelBonus:3,capUnlock:true,capBonus:1}]},
 ];
 const canonicalSkills:CanonicalSkill[]=[
- {id:'KNY_INHERENT_1',name:'梟雄の計',type:'固有',attachable:false},
- {id:'KNY_INHERENT_2',name:'七十二の計',type:'固有',attachable:false},
- {id:'KNY_0001',name:'紅蓮の炎',type:'能動',attachable:true},
- {id:'KNY_0002',name:'回天転運',type:'能動',attachable:true},
- {id:'KNY_0003',name:'一行三昧',type:'能動',attachable:true},
+ {id:'KNY_INHERENT_1',name:'梟雄の計',type:'固有',attachable:false,unitLevelEffects:[]},
+ {id:'KNY_INHERENT_2',name:'七十二の計',type:'固有',attachable:false,unitLevelEffects:[]},
+ {id:'KNY_0001',name:'紅蓮の炎',type:'能動',attachable:true,unitLevelEffects:[]},
+ {id:'KNY_0002',name:'回天転運',type:'能動',attachable:true,unitLevelEffects:[]},
+ {id:'KNY_0003',name:'一行三昧',type:'能動',attachable:true,unitLevelEffects:[]},
 ];
 
 function editor(props:Partial<React.ComponentProps<typeof FormationEditor>>={}){
@@ -53,19 +53,23 @@ describe('FormationEditor',()=>{
   render(editor());
   const level=screen.getByRole('spinbutton',{name:'兵種Lv'});
   expect(level).toHaveAttribute('readonly');
+  expect(level).not.toHaveAttribute('max');
   expect(level).toHaveValue(5);
   fireEvent.change(screen.getByLabelText('兵種'),{target:{value:'鉄砲'}});
   fireEvent.change(screen.getByRole('combobox',{name:'大将 武将名'}),{target:{value:'松永久秀'}});
   fireEvent.change(screen.getByRole('spinbutton',{name:'大将 凸'}),{target:{value:'3'}});
   await waitFor(()=>expect(level).toHaveValue(8));
   expect(screen.getByLabelText('兵種Lv計算根拠')).toHaveTextContent('松永久秀「砲術Ⅲ」+3');
+  expect(screen.getByLabelText('兵種Lv計算根拠')).toHaveTextContent('上限10');
  });
 
- it('unlocks troop level 11 when a general trait applies',async()=>{
+ it('removes the ceiling entirely when a cap-unlock trait applies',async()=>{
   render(editor());
-  fireEvent.change(screen.getByRole('combobox',{name:'大将 武将名'}),{target:{value:'柿崎景家'}});
-  await waitFor(()=>expect(screen.getByRole('spinbutton',{name:'兵種Lv'})).toHaveValue(8));
-  expect(screen.getByLabelText('兵種Lv計算根拠')).toHaveTextContent('上限11');
+  for(const role of ['大将','副将1','副将2'])fireEvent.change(screen.getByRole('combobox',{name:`${role} 武将名`}),{target:{value:'柿崎景家'}});
+  const level=screen.getByRole('spinbutton',{name:'兵種Lv'});
+  await waitFor(()=>expect(level).toHaveValue(14));
+  expect(screen.getByLabelText('兵種Lv計算根拠')).toHaveTextContent('上限解放済み・天井なし');
+  expect(screen.getByLabelText('兵種Lv計算根拠')).not.toHaveTextContent('上限11');
  });
 
  it('shows partial warrior candidates and selects one to autofill the inherent skill',()=>{
