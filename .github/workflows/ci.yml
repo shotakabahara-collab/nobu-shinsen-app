@@ -22,7 +22,11 @@ jobs:
       - run: npm ci
       - run: npm audit --omit=dev
       - name: Probe canonical troop level rules
-        run: python3 scripts/probe_unit_level_rule.py
+        run: python3 scripts/probe_unit_level_rule.py > troop-level-probe.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: troop-level-probe
+          path: troop-level-probe.txt
       - run: npm run build:runtime
       - run: npm run test:runtime
       - run: npm test
