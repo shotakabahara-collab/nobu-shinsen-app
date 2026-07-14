@@ -8,6 +8,8 @@ const canonical:CanonicalOfficer[]=[
  {id:'WL_MATSU_HISA',name:'松永久秀',inherentSkill:'梟雄の計',unitLevelTraits:[{name:'砲術Ⅲ',unlockedAt:3,unitTypes:['鉄砲'],levelBonus:3,capUnlock:false,capBonus:0}]},
  {id:'WL_KURODA_KANBEI',name:'黒田官兵衛',inherentSkill:'七十二の計',unitLevelTraits:[]},
  {id:'WL_PALETTE_082',name:'柿崎景家',inherentSkill:'越後二天',unitLevelTraits:[{name:'騎兵大将',unlockedAt:0,unitTypes:['騎馬'],levelBonus:3,capUnlock:true,capBonus:1}]},
+ {id:'WL_PALETTE_101',name:'北条綱成',inherentSkill:'地黄八幡',unitLevelTraits:[{name:'騎兵大将',unlockedAt:0,unitTypes:['騎馬'],levelBonus:3,capUnlock:true,capBonus:1}]},
+ {id:'WL_SAKAKIBARA_YASUMASA',name:'榊原康政',inherentSkill:'無傷の誇',unitLevelTraits:[{name:'馬術Ⅲ',unlockedAt:0,unitTypes:['騎馬'],levelBonus:3,capUnlock:false,capBonus:0}]},
 ];
 const canonicalSkills:CanonicalSkill[]=[
  {id:'KNY_INHERENT_1',name:'梟雄の計',type:'固有',attachable:false,unitLevelEffects:[]},
@@ -65,7 +67,8 @@ describe('FormationEditor',()=>{
 
  it('removes the ceiling entirely when a cap-unlock trait applies',async()=>{
   render(editor());
-  for(const role of ['大将','副将1','副将2'])fireEvent.change(screen.getByRole('combobox',{name:`${role} 武将名`}),{target:{value:'柿崎景家'}});
+  const names=['柿崎景家','北条綱成','榊原康政'];
+  for(const [index,role] of ['大将','副将1','副将2'].entries())fireEvent.change(screen.getByRole('combobox',{name:`${role} 武将名`}),{target:{value:names[index]}});
   const level=screen.getByRole('spinbutton',{name:'兵種Lv'});
   await waitFor(()=>expect(level).toHaveValue(14));
   expect(screen.getByLabelText('兵種Lv計算根拠')).toHaveTextContent('上限解放済み・天井なし');
