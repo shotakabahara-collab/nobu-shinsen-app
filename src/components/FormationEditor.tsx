@@ -7,7 +7,7 @@ import {AutocompleteInput,type AutocompleteOption} from './ui/AutocompleteInput'
 import {Button} from './ui/button';
 
 const roles=['大将','副将1','副将2'] as const;
-const defaultUnitLevelRule={baseLevel:5,defaultCap:10,generalTraitCap:11} as const;
+const defaultUnitLevelRule={baseLevel:5,defaultCap:10,capUnlockMode:'unbounded'} as const;
 
 type Props={
  initial?:Formation;
@@ -81,7 +81,7 @@ export function FormationEditor({initial,warriors=[],skills=[],canonicalOfficers
   return Array.from(byName.values());
  },[canonicalSkillByName,inherentNames,skillCatalog,skills]);
 
- const troopLevel=useMemo(()=>calculateTroopLevel(value.troopType,value.warriors,officerCatalog,unitLevelRule),[officerCatalog,unitLevelRule,value.troopType,value.warriors]);
+ const troopLevel=useMemo(()=>calculateTroopLevel(value.troopType,value.warriors,officerCatalog,skillCatalog,unitLevelRule),[officerCatalog,skillCatalog,unitLevelRule,value.troopType,value.warriors]);
 
  useEffect(()=>{
   if(canonicalOfficers){setOfficerCatalog(canonicalOfficers);setOfficerCatalogError('');return;}
@@ -173,8 +173,11 @@ export function FormationEditor({initial,warriors=[],skills=[],canonicalOfficers
  }
 
  const troopLevelDetails=troopLevel.sources.length
-  ? troopLevel.sources.map(source=>`${source.officerName}「${source.traitName}」+${source.levelBonus}${source.capBonus?'/上限+1':''}`).join('、')
-  : '対象兵種の兵種Lv特性なし';
+  ? troopLevel.sources.map(source=>source.sourceType==='trait'
+   ? `${source.officerName}「${source.sourceName}」+${source.levelBonus}${source.capUnlock?'/上限解放':''}`
+   : `戦法「${source.sourceName}」+${source.levelBonus}${source.capUnlock?'/上限解放':''}`).join('、')
+  : '対象兵種の兵種Lv効果なし';
+ const capDetails=troopLevel.capUnlocked?'上限解放済み・天井なし':`上限${troopLevel.cap}`;
 
  return <form onSubmit={e=>void submit(e)} className="space-y-4">
   <section className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
@@ -183,10 +186,10 @@ export function FormationEditor({initial,warriors=[],skills=[],canonicalOfficers
     <label className="col-span-2 text-sm text-slate-400">編成名<input aria-label="編成名" className={field} value={value.name} onChange={e=>setValue({...value,name:e.target.value})}/></label>
     <label className="text-sm text-slate-400">区分<select aria-label="区分" className={field} value={value.kind} onChange={e=>setValue({...value,kind:e.target.value as 'ally'|'enemy'})}><option value="ally">自軍</option><option value="enemy">敵軍</option></select></label>
     <label className="text-sm text-slate-400">兵種<select aria-label="兵種" className={field} value={value.troopType} onChange={e=>setValue({...value,troopType:e.target.value as Formation['troopType']})}>{troopTypes.map(type=><option key={type}>{type}</option>)}</select></label>
-    <label className="text-sm text-slate-400">兵種Lv<span className="ml-2 text-xs text-emerald-400">凸・特性から自動</span><input aria-label="兵種Lv" className={`${field} opacity-80`} type="number" min="1" max="11" value={troopLevel.level} readOnly/></label>
+    <label className="text-sm text-slate-400">兵種Lv<span className="ml-2 text-xs text-emerald-400">凸・戦法・特性から自動</span><input aria-label="兵種Lv" className={`${field} opacity-80`} type="number" min="1" value={troopLevel.level} readOnly/></label>
     <label className="text-sm text-slate-400">兵力<input aria-label="兵力" className={`${field} opacity-75`} type="number" value={10000} readOnly aria-describedby="troops-help"/></label>
     <p id="troops-help" className="col-span-2 text-xs text-slate-400">b223正式評価仕様に従い、兵力は各武将10,000固定です。</p>
-    <p className="col-span-2 rounded-lg bg-slate-950 p-3 text-xs text-emerald-300" aria-label="兵種Lv計算根拠">兵舎Lv{troopLevel.baseLevel}＋{troopLevelDetails}＝兵種Lv{troopLevel.level}（上限{troopLevel.cap}）</p>
+    <p className="col-span-2 rounded-lg bg-slate-950 p-3 text-xs text-emerald-300" aria-label="兵種Lv計算根拠">兵舎Lv{troopLevel.baseLevel}＋{troopLevelDetails}＝兵種Lv{troopLevel.level}（{capDetails}）</p>
     {troopLevel.unknownOfficers.length>0&&<p className="col-span-2 text-xs text-amber-300">未登録武将の兵種特性は未加算：{troopLevel.unknownOfficers.join('、')}</p>}
     <p className="col-span-2 text-xs text-emerald-400">武将名・戦法名は一部を入力すると、正本DB候補から選択できます。</p>
    </div>
