@@ -7,15 +7,16 @@ const payload={
  canonicalArchiveSha256:'f'.repeat(64),
  skillCount:2,
  skills:[
-  {id:'KNY_0001',name:'紅蓮の炎',type:'能動',attachable:true},
-  {id:'KNY_0002',name:'七十二の計',type:'能動',attachable:true},
+  {id:'KNY_0001',name:'紅蓮の炎',type:'能動',attachable:true,unitLevelEffects:[]},
+  {id:'KNY_0002',name:'兵種覚醒',type:'指揮',attachable:true,unitLevelEffects:[{name:'兵種覚醒',unitTypes:['騎馬' as const],levelBonus:0,capUnlock:true}]},
  ],
 };
 
 describe('loadCanonicalSkillCatalog',()=>{
- it('loads a valid catalog',async()=>{
+ it('loads a valid catalog with optional unit-level effects',async()=>{
   const fetcher=async()=>new Response(JSON.stringify(payload),{status:200});
-  await expect(loadCanonicalSkillCatalog(fetcher as typeof fetch,'/catalog.json')).resolves.toEqual(payload);
+  const result=await loadCanonicalSkillCatalog(fetcher as typeof fetch,'/catalog.json');
+  expect(result.skills[1]?.unitLevelEffects[0]).toEqual({name:'兵種覚醒',unitTypes:['騎馬'],levelBonus:0,capUnlock:true});
  });
 
  it('rejects duplicate skill names',async()=>{
