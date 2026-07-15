@@ -13,6 +13,12 @@ export type BattleSnapshot={schemaVersion:1;source:'canonical_officer_stats_cata
 export type ActionOrderEntry={rank:number;side:BattleSide;rawSide:'A'|'B';officer:string;role:string;effectiveSpeed:number|null;baseSpeed:number|null;timedSpeedBonus:number;persistentSpeedBonus:number};
 export type ActionOrderTurn={turn:number;entries:ActionOrderEntry[]};
 export type RepresentativeTrace={source:'runtime_trace'|'initial_speed_snapshot';direction:'forward'|'reverse';seed:number|null;winner:BattleSide|null;winReason:string;hpDiff:number|null;turns:ActionOrderTurn[];keyEvents:Record<string,unknown>[]};
+export type TroopPoint={side:BattleSide;officer:string;troops:number};
+export type TroopChange={side:BattleSide;officer:string;before:number;after:number;delta:number;kind:'troops'|'reserve';source:string};
+export type BattleExampleAction=ActionOrderEntry&{events:string[];troopChanges:TroopChange[]};
+export type BattleExampleTurn={turn:number;status:'active'|'battle_ended';startTroops:TroopPoint[];endTroops:TroopPoint[];turnStartChanges:TroopChange[];actions:BattleExampleAction[];turnEndChanges:TroopChange[]};
+export type BattleExample={outcome:'win'|'loss';direction:'forward'|'reverse';seed:number;winner:BattleSide|'draw';winReason:string;endedTurn:number;maxTurns:8;hpDiff:number|null;turns:BattleExampleTurn[];error?:string};
+export type BattleExampleSet={schemaVersion:1;trialsPerDirection:number;directions:2;completedTrials:number;candidateWins:number;candidateLosses:number;draws:number;selectionPolicy:string;examples:BattleExample[]};
 
 const roles=['大将','副将1','副将2'] as const;
 const emptyStats=():StatValues=>({force:null,intel:null,lead:null,speed:null});
@@ -43,6 +49,12 @@ export function parseBattleSnapshot(payload:Record<string,unknown>):BattleSnapsh
  const candidate=record(payload.battle_snapshot);if(!candidate||candidate.schemaVersion!==1||candidate.source!=='canonical_officer_stats_catalog')return undefined;
  const sides=record(candidate.sides),a=record(sides?.A),b=record(sides?.B);if(!a||!b||array(a.officers).length!==3||array(b.officers).length!==3)return undefined;
  return candidate as unknown as BattleSnapshot;
+}
+
+export function parseBattleExamples(payload:Record<string,unknown>):BattleExampleSet|undefined{
+ const candidate=record(payload.battle_examples);if(!candidate||candidate.schemaVersion!==1||candidate.directions!==2)return undefined;
+ const examples=array(candidate.examples);if(!examples.every(value=>record(value)&&Array.isArray(record(value)?.turns)))return undefined;
+ return candidate as unknown as BattleExampleSet;
 }
 
 function canonicalSide(direction:'forward'|'reverse',raw:'A'|'B'):BattleSide{return direction==='forward'?raw:raw==='A'?'B':'A';}
@@ -76,6 +88,13 @@ export function enrichTraceRoles(trace:RepresentativeTrace,snapshot:BattleSnapsh
  if(!snapshot)return trace;
  return {...trace,turns:trace.turns.map(turn=>({...turn,entries:turn.entries.map(entry=>{
   const officer=snapshot.sides[entry.side].officers.find(value=>value.name===entry.officer);return {...entry,role:officer?.role??entry.role};
+ })}))};
+}
+
+export function enrichExampleRoles(example:BattleExample,snapshot:BattleSnapshot|undefined):BattleExample{
+ if(!snapshot)return example;
+ return {...example,turns:example.turns.map(turn=>({...turn,actions:turn.actions.map(action=>{
+  const officer=snapshot.sides[action.side].officers.find(value=>value.name===action.officer);return {...action,role:officer?.role??action.role};
  })}))};
 }
 
