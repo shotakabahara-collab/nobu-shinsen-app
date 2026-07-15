@@ -17,6 +17,8 @@ describe('buildTargetOptimizationRequest',()=>{
   expect(request.owned_pool).toEqual([{name:'追加武将',awaken:5}]);
   expect(request.skill_pool).toEqual([{name:'装着X'}]);
   expect(request.units).toEqual(['足軽','騎馬','鉄砲','弓']);
+  expect(request.role_family_shortlist).toBe(2);
+  expect(request.trials).toBe(4);
  });
 
  it('falls back to the target as a seed when it is the only registered formation',()=>{

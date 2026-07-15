@@ -5,7 +5,7 @@
 - Bootstrap archive SHA-256: `00f9305903d58bc3d1e292ce675d66c5a2256ac31174719fcc699251c0526d0d`
 - Canonical archive SHA-256: `fe0086eb5797e6c32b1156e736fe432a500dce7dfcb8921fed28c336a17b0fa3`
 - Canonical `02_ENGINE/battle_simulator.py` SHA-256: `4f308f4bcd297ee292e41b0ad13243fa3df61df49b1b8f68926eba70843bcecc`
-- Generated runtime bundle SHA-256: `42910f235511f5b54ec84802f072836b40935b7349455d08e36b4d5815ff423b`
+- Generated runtime bundle SHA-256: `a05642371d1baa28bb5c0c9a6c2b6b1b0946b7fb42dbc5aa953751eb8272820e`
 - Canonical ZIP members: 1366 unique, 0 duplicate names
 - Generated bundle members: 1367 unique, 0 duplicate names
 - Supplied legacy runtime bundle: 2687 members, 1223 duplicate names; it is not used as the production bundle
@@ -15,6 +15,8 @@
 `canonical/NOBU_ONE_v1326p15e2b223.zip` is immutable input. The build script verifies its archive and battle runtime hashes, extracts it to a temporary directory, and overlays only `runtime/adapter/browser_runtime_api.py`. The canonical archive is never rewritten.
 
 Public operations are `calculate`, `search`, and `formal`. The 100-battle calculate path invokes an internal `calculateBatch` lane for 10 forward and 10 reverse battles at a time and streams all five batches through one Pyodide worker. Successful batches retain their JavaScript-side checkpoint; only a fatal Wasm batch restarts and adaptively splits. Win/loss detail traces reuse the same worker and collect only the action order, scoreboards, selected events, and logs required by the T1-T8 UI. TypeScript validates and maps application formations before every request. The worker wraps every Python exception with its type, message, traceback, operation, request context, and seed before Safari can reduce it to bare Wasm frames.
+
+The search adapter admits commander/deputy permutations as atomic six-placement families. It never spends the final structural budget on only part of a family. Shortlisted families run every formal-ready role order with common random seeds; ranking uses win rate, remaining-troop difference, and structural score, then returns the best role order plus all evaluated variants for manual switching in the UI.
 
 The release lock in `canonical/LOCK.json` pins the canonical archive, battle runtime, and generated runtime bundle hashes. Build, Python integrity tests, offline asset verification, and the post-deploy Pages smoke test all read or validate the same release lock. A bundle hash drift fails the build.
 

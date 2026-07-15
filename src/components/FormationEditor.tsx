@@ -127,6 +127,13 @@ export function FormationEditor({initial,initialImageImportOpen=false,warriors=[
   updateWarrior(index,{name,inherentSkill:match?.inherentSkill??'未登録'});
  }
 
+ function swapWarriorRoles(first:number,second:number){
+  if(first===second||first<0||first>2||second<0||second>2)return;
+  const next=structuredClone(value.warriors);
+  [next[first],next[second]]=[next[second]!,next[first]!];
+  setError('');setValue({...value,warriors:next});
+ }
+
  function equippedSkillRestriction(name:string):string|undefined{
   const normalized=normalizeFormationName(name);
   if(!normalized)return undefined;
@@ -217,6 +224,11 @@ export function FormationEditor({initial,initialImageImportOpen=false,warriors=[
   {officerCatalogError&&<p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-300">{officerCatalogError}。未登録武将は固有戦法を手入力できます。</p>}
   {skillCatalogError&&<p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-300">{skillCatalogError}。登録済み戦法は引き続き入力できます。</p>}
   {formalSkillIssues.length>0&&value.warriors.every(warrior=>warrior.equippedSkills.every(Boolean))&&<aside role="alert" className="rounded-xl bg-red-950 p-3 text-sm leading-6 text-red-200"><strong>正本ルールに合わない戦法構成です</strong><ul>{formalSkillIssues.map(issue=><li key={`${issue.code}-${issue.skillNames.join('-')}`}>・{issue.message}</li>)}</ul></aside>}
+  <section className="rounded-2xl border border-cyan-800 bg-cyan-950/20 p-4" aria-label="大将と副将の入れ替え">
+   <h3 className="font-bold text-cyan-200">大将・副将を入れ替え</h3>
+   <p className="mt-1 text-xs leading-5 text-slate-400">役割を選び直すと、武将の凸・固有戦法・装着戦法2枠をまとめて移動します。</p>
+   <div className="mt-3 grid gap-3 sm:grid-cols-3">{roles.map((role,index)=><label key={role} className="text-xs font-bold text-slate-300">{role}<select aria-label={`${role}に配置する武将`} className={`${field} mt-1 text-sm`} value={value.warriors[index]?.id??''} onChange={event=>{const source=value.warriors.findIndex(warrior=>warrior.id===event.target.value);if(source>=0)swapWarriorRoles(index,source);}}>{value.warriors.map((warrior,warriorIndex)=><option key={warrior.id} value={warrior.id}>{warrior.name||`武将${warriorIndex+1}`}</option>)}</select></label>)}</div>
+  </section>
   {value.warriors.map((warrior,index)=>{
    const canonical=canonicalByName.get(normalizeFormationName(warrior.name));
    return <section key={warrior.id} className="rounded-2xl border border-slate-700 bg-slate-900 p-4">

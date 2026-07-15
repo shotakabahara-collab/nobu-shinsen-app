@@ -17,9 +17,10 @@ export function buildTargetOptimizationRequest(target:Formation,formations:Forma
   structural_budget:1200,
   targets:[{id:target.id,spec:toRuntimeFormation(target)}],
   units:['足軽','騎馬','鉄砲','弓'],
-  trials:2,
+  trials:4,
   blocks:1,
   shortlist:8,
+  role_family_shortlist:2,
   seed:1326237000,
  };
 }

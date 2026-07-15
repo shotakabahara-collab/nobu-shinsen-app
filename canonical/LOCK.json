@@ -5,6 +5,6 @@
   "archiveSha256": "fe0086eb5797e6c32b1156e736fe432a500dce7dfcb8921fed28c336a17b0fa3",
   "battleRuntimePath": "02_ENGINE/battle_simulator.py",
   "battleRuntimeSha256": "4f308f4bcd297ee292e41b0ad13243fa3df61df49b1b8f68926eba70843bcecc",
-  "runtimeBundleSha256": "42910f235511f5b54ec84802f072836b40935b7349455d08e36b4d5815ff423b",
+  "runtimeBundleSha256": "a05642371d1baa28bb5c0c9a6c2b6b1b0946b7fb42dbc5aa953751eb8272820e",
   "policy": "READ_ONLY_CANONICAL_ADAPTERS_OUTSIDE_ARCHIVE"
 }
