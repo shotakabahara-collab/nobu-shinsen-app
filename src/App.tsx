@@ -21,6 +21,7 @@ import {loadCanonicalOfficerStatsCatalog} from './services/canonicalOfficerStats
 import {loadCanonicalSkillCatalog} from './services/canonicalSkillCatalog';
 import {attachBattleSnapshot,buildBattleSnapshot} from './battleLog/battleLogView';
 import {ENGINE_DISPLAY_NAME,ENGINE_DISPLAY_SUBTITLE,ENGINE_RESULT_LABEL} from './domain/engineBrand';
+import {validateFormalFormationSkills} from './domain/formationRules';
 
 type Page='formations'|'battle'|'data';
 type EditingState=Formation|'new'|'image'|null;
@@ -40,6 +41,7 @@ export default function App(){
  const [formationBId,setFormationBId]=useState('');
  const [optimizationTargetId,setOptimizationTargetId]=useState('');
  const [selectedRecommendationIndex,setSelectedRecommendationIndex]=useState(0);
+ const [battleInputError,setBattleInputError]=useState('');
 
  useEffect(()=>{void store.load();},[store.load]);
  useEffect(()=>{
@@ -57,7 +59,7 @@ export default function App(){
  const selectedRecommendation=recommendations[selectedRecommendationIndex]??recommendations[0];
  const searchScope=useMemo(()=>getSearchScope(searchResult),[searchResult]);
 
- useEffect(()=>{setResult(null);},[formationAId,formationBId,formationA?.updatedAt,formationB?.updatedAt]);
+ useEffect(()=>{setResult(null);setBattleInputError('');},[formationAId,formationBId,formationA?.updatedAt,formationB?.updatedAt]);
  useEffect(()=>{setSearchResult(null);setFormalResult(null);setSelectedRecommendationIndex(0);},[optimizationTargetId,optimizationTarget?.updatedAt]);
 
  async function importFile(file?:File){
@@ -77,6 +79,15 @@ export default function App(){
 
  async function calculate(){
   if(!formationA||!formationB||formationA.id===formationB.id)return;
+  setBattleInputError('');setNotice('正本の編成ルールを確認中…');
+  try{
+   const catalog=await loadCanonicalSkillCatalog();
+   const issues=[
+    ...validateFormalFormationSkills(formationA.troopType,formationA.warriors,catalog.skills).map(issue=>`編成A「${formationA.name}」：${issue.message}`),
+    ...validateFormalFormationSkills(formationB.troopType,formationB.warriors,catalog.skills).map(issue=>`編成B「${formationB.name}」：${issue.message}`),
+   ];
+   if(issues.length){setBattleInputError(issues.join('\n'));setNotice('対戦を開始できません。編成の戦法構成を修正してください');return;}
+  }catch(error){setBattleInputError(error instanceof Error?error.message:'正本戦法カタログを確認できませんでした');setNotice('対戦前の編成確認に失敗しました');return;}
   setRunning(true);setNotice(`${ENGINE_DISPLAY_NAME}で100戦を計算中…`);
   try{
    const raw=await runtimeClient.calculate({candidate:toRuntimeFormation(formationA),target:formationB.id,target_spec:toRuntimeFormation(formationB),trials:50,blocks:1,seed:1326230000,include_detail:true},progress=>{
@@ -138,7 +149,7 @@ export default function App(){
 
    {page==='battle'&&<>
     <div><h2 className="text-xl font-bold">対戦・最適編成</h2><p className="mt-1 text-sm text-slate-400">登録した編成を自由にぶつけるか、1つの編成を対象に最適候補を探索します。</p></div>
-    <section className="space-y-3 rounded-2xl border border-amber-800 bg-slate-900 p-4"><h3 className="font-bold">登録編成同士を対戦</h3><p className="text-xs text-slate-400">順方向50戦＋逆方向50戦の合計100戦で勝率を算出します。iPhoneの負荷を抑えるため、進捗を表示しながら分割実行します。</p><label className="block text-sm text-slate-400">編成A<select aria-label="編成A" className="mt-1 w-full rounded-lg bg-slate-950 p-3" value={formationAId} onChange={event=>setFormationAId(event.target.value)}><option value="">選択</option>{store.formations.map(formation=><option key={formation.id} value={formation.id} disabled={formation.id===formationBId}>{formation.name}</option>)}</select></label><label className="block text-sm text-slate-400">編成B<select aria-label="編成B" className="mt-1 w-full rounded-lg bg-slate-950 p-3" value={formationBId} onChange={event=>setFormationBId(event.target.value)}><option value="">選択</option>{store.formations.map(formation=><option key={formation.id} value={formation.id} disabled={formation.id===formationAId}>{formation.name}</option>)}</select></label>{running?<Button variant="danger" className="w-full" onClick={()=>cancelRuntime('計算を中止しました')}><Square className="mr-2 size-4"/>中止</Button>:<Button className="w-full" disabled={!formationA||!formationB||formationA.id===formationB.id} onClick={()=>void calculate()}><Swords className="mr-2 size-4"/>100戦で対戦</Button>}{result&&<ResultCard result={result} label={`${formationA?.name??'編成A'}の勝率`}/>}</section>
+    <section className="space-y-3 rounded-2xl border border-amber-800 bg-slate-900 p-4"><h3 className="font-bold">登録編成同士を対戦</h3><p className="text-xs text-slate-400">順方向50戦＋逆方向50戦の合計100戦で勝率を算出します。iPhoneの負荷を抑えるため、進捗を表示しながら分割実行します。</p><label className="block text-sm text-slate-400">編成A<select aria-label="編成A" className="mt-1 w-full rounded-lg bg-slate-950 p-3" value={formationAId} onChange={event=>setFormationAId(event.target.value)}><option value="">選択</option>{store.formations.map(formation=><option key={formation.id} value={formation.id} disabled={formation.id===formationBId}>{formation.name}</option>)}</select></label><label className="block text-sm text-slate-400">編成B<select aria-label="編成B" className="mt-1 w-full rounded-lg bg-slate-950 p-3" value={formationBId} onChange={event=>setFormationBId(event.target.value)}><option value="">選択</option>{store.formations.map(formation=><option key={formation.id} value={formation.id} disabled={formation.id===formationAId}>{formation.name}</option>)}</select></label>{battleInputError&&<p role="alert" className="whitespace-pre-line rounded-xl bg-red-950 p-3 text-sm leading-6 text-red-200">{battleInputError}</p>}{running?<Button variant="danger" className="w-full" onClick={()=>cancelRuntime('計算を中止しました')}><Square className="mr-2 size-4"/>中止</Button>:<Button className="w-full" disabled={!formationA||!formationB||formationA.id===formationB.id} onClick={()=>void calculate()}><Swords className="mr-2 size-4"/>100戦で対戦</Button>}{result&&<ResultCard result={result} label={`${formationA?.name??'編成A'}の勝率`}/>}</section>
 
     <section className="space-y-3 rounded-2xl border border-emerald-800 bg-slate-900 p-4"><div><h3 className="flex items-center font-bold"><Target className="mr-2 size-5 text-emerald-400"/>選択編成への最適候補</h3><p className="mt-1 text-sm text-slate-400">登録編成と所有武将・所有戦法を起点に、対象編成へ最も高い評価を得た候補を提示します。</p></div><label className="block text-sm text-slate-400">最適化する対象編成<select aria-label="最適化対象" className="mt-1 w-full rounded-lg bg-slate-950 p-3" value={optimizationTargetId} onChange={event=>setOptimizationTargetId(event.target.value)}><option value="">選択</option>{store.formations.map(formation=><option key={formation.id} value={formation.id}>{formation.name}</option>)}</select></label>{running?<Button variant="danger" className="w-full" onClick={()=>cancelRuntime('探索を中止しました')}><Square className="mr-2 size-4"/>中止</Button>:<Button className="w-full" disabled={!optimizationTarget} onClick={()=>void optimize()}>最適編成を探索</Button>}{searchResult&&<RecommendationPanel recommendations={recommendations} selectedIndex={selectedRecommendationIndex} onSelect={index=>{setSelectedRecommendationIndex(index);setFormalResult(null);}} targetId={optimizationTargetId} scope={searchScope}/>} {selectedRecommendation&&<div className="grid gap-3 sm:grid-cols-2"><Button variant="secondary" disabled={running} onClick={()=>void formalize()}>選択候補を30×3再評価</Button><Button disabled={running} onClick={()=>void registerRecommendation()}><Save className="mr-2 size-4"/>選択候補を編成登録</Button></div>}{formalResult&&<FormalCard result={formalResult}/>}</section>
 

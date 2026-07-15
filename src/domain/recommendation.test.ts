@@ -12,7 +12,7 @@ const officers:CanonicalOfficer[]=[
  {id:'2',name:'北条綱成',inherentSkill:'地黄八幡',unitLevelTraits:[{name:'騎兵大将',unlockedAt:0,unitTypes:['騎馬'],levelBonus:3,capUnlock:true,capBonus:1}]},
  {id:'3',name:'榊原康政',inherentSkill:'無傷の誇',unitLevelTraits:[{name:'馬術Ⅲ',unlockedAt:0,unitTypes:['騎馬'],levelBonus:3,capUnlock:false,capBonus:0}]},
 ];
-const skills:CanonicalSkill[]=candidate.skills.map((name,index)=>({id:String(index),name,type:'能動',attachable:true,unitLevelEffects:[]}));
+const skills:CanonicalSkill[]=candidate.skills.map((name,index)=>({id:String(index),name,type:'能動',attachable:true,slotType:'normal',allowedUnitTypes:[],unitLevelEffects:[]}));
 
 describe('recommendation',()=>{
  it('parses ranked runtime candidates and produces grounded reasons',()=>{

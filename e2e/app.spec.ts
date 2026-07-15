@@ -53,6 +53,28 @@ test('opens on iPhone and presents visible image import, photo library and camer
  await expect(page.getByRole('heading',{name:'戦法管理'})).toBeVisible();
 });
 
+test('blocks the reported double unit-type skill formation before starting Pyodide',async({page})=>{
+ const now='2026-07-16T00:00:00.000Z';
+ const warrior=(id:string,name:string,equippedSkills:[string,string])=>({id,name,limitBreak:0,inherentSkill:'固有戦法',equippedSkills});
+ const backup={schemaVersion:2,exportedAt:now,warriors:[],skills:[],battleResults:[],formations:[
+  {id:'30000000-0000-4000-8000-000000000001',name:'報告編成A',kind:'ally',troopType:'鉄砲',troopLevel:5,troops:10000,createdAt:now,updatedAt:now,warriors:[
+   warrior('31000000-0000-4000-8000-000000000001','鈴木佐大夫',['有備無患','破天の轟']),warrior('31000000-0000-4000-8000-000000000002','本願寺顕如',['僧兵','攻其不備']),warrior('31000000-0000-4000-8000-000000000003','妻木煕子',['大智不智','鉄砲僧兵'])]},
+  {id:'30000000-0000-4000-8000-000000000002',name:'報告編成B',kind:'enemy',troopType:'足軽',troopLevel:5,troops:10000,createdAt:now,updatedAt:now,warriors:[
+   warrior('32000000-0000-4000-8000-000000000001','徳川家康',['所領役帳','一領具足']),warrior('32000000-0000-4000-8000-000000000002','本多正信',['知者楽水','乗勝追撃']),warrior('32000000-0000-4000-8000-000000000003','本多忠勝',['大智不智','理非曲直'])]},
+ ]};
+ await page.goto('./');await page.getByRole('button',{name:'データ'}).click();
+ await page.locator('input[type="file"]').setInputFiles({name:'reported-invalid-formation.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
+ await expect(page.getByText('バックアップを復元しました（編成2件）',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'対戦・提案'}).click();
+ await page.getByLabel('編成A').selectOption(backup.formations[0].id);await page.getByLabel('編成B').selectOption(backup.formations[1].id);
+ await page.getByRole('button',{name:'100戦で対戦'}).click();
+ const error=page.getByRole('alert');
+ await expect(error).toContainText('編成A「報告編成A」：兵種戦法は1編成に1つまでです。');
+ await expect(error).toContainText('「僧兵」は足軽専用のため、鉄砲編成では使用できません。');
+ await expect(page.getByText('対戦を開始できません。編成の戦法構成を修正してください',{exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'中止'})).toHaveCount(0);
+});
+
 test('runs 100 balanced battles and shows one win and loss example through T8 online and offline',async({page,context})=>{
  test.setTimeout(600_000);
  const now='2026-07-13T00:00:00.000Z';

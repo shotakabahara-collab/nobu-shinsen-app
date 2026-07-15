@@ -40,7 +40,17 @@ detail_request.update({'direction':'forward','seed':1326230000})
 detail=json.loads(namespace['detail'](json.dumps(detail_request,ensure_ascii=False)))
 error_raw=namespace['run_operation']('detail','{}')
 error=json.loads(error_raw.split(namespace['_RUNTIME_ERROR_PREFIX'],1)[1])
-print(json.dumps({'batch':batch,'detail':detail,'error':error},ensure_ascii=False))
+formal_calls=[]
+def formal_stop(*args,**kwargs):
+ formal_calls.append(kwargs.get('seed'))
+ raise RuntimeError('FORMAL_BATTLE_INPUT_CONTRACT_STOP ["left: formal_status_stop:STOP_UNIT_TYPE_LIMIT"]')
+namespace['simulate_once']=formal_stop
+try:
+ namespace['_run_direction'](None,{},{} ,'forward',1326230000,10)
+ formal_error='missing error'
+except RuntimeError as exc:
+ formal_error=str(exc)
+print(json.dumps({'batch':batch,'detail':detail,'error':error,'formal_calls':formal_calls,'formal_error':formal_error},ensure_ascii=False))
 '''
    result=subprocess.run([sys.executable,'-c',code,str(ROOT/'public/runtime-worker.js'),str(ROOT/'fixtures/runtime/calculate_request.json')],cwd=Path(td)/'02_ENGINE',text=True,capture_output=True,check=True)
    payload=json.loads(result.stdout);batch=payload['batch'];detail=payload['detail'];error=payload['error']
@@ -49,4 +59,5 @@ print(json.dumps({'batch':batch,'detail':detail,'error':error},ensure_ascii=Fals
    self.assertEqual(batch['forward']['next_seed'],1326230001);self.assertEqual(batch['reverse']['next_seed'],1326235004)
    self.assertEqual(detail['type'],'battle_detail');self.assertEqual(detail['max_turns'],8);self.assertTrue(detail['turns'])
    self.assertEqual(error['operation'],'detail');self.assertEqual(error['python_error_type'],'KeyError');self.assertIn('Traceback',error['python_traceback'])
+   self.assertEqual(payload['formal_calls'],[1326230000]);self.assertIn('正本入力が戦闘開始条件を満たしません',payload['formal_error']);self.assertIn('STOP_UNIT_TYPE_LIMIT',payload['formal_error'])
 if __name__=='__main__':unittest.main()

@@ -69,6 +69,20 @@ export type UnitLevelRule={
  capUnlockMode?:'unbounded';
 };
 
+export type FormalSkillRecord={
+ name:string;
+ type?:string;
+ attachable?:boolean;
+ slotType?:'normal'|'unitType'|'formation';
+ allowedUnitTypes?:readonly UnitType[];
+};
+
+export type FormalFormationSkillIssue={
+ code:'unknown-skill'|'not-attachable'|'unit-type-skill-limit'|'formation-skill-limit'|'unit-type-mismatch';
+ message:string;
+ skillNames:string[];
+};
+
 export function normalizeFormationName(value:string):string{
  return value.normalize('NFKC').trim();
 }
@@ -89,6 +103,55 @@ export function findDuplicateEquippedSkill(warriors:readonly FormationWarriorLik
   }
  }
  return undefined;
+}
+
+function formalSlotType(skill:FormalSkillRecord):'normal'|'unitType'|'formation'{
+ if(skill.slotType)return skill.slotType;
+ if(skill.type==='兵種')return 'unitType';
+ if(skill.type==='陣形')return 'formation';
+ return 'normal';
+}
+
+export function validateFormalFormationSkills(
+ troopType:UnitType,
+ warriors:readonly FormationWarriorLike[],
+ skills:readonly FormalSkillRecord[],
+):FormalFormationSkillIssue[]{
+ const byName=new Map(skills.map(skill=>[normalizeFormationName(skill.name),skill]));
+ const equipped=warriors.flatMap(warrior=>warrior.equippedSkills.map(rawName=>{
+  const name=normalizeFormationName(rawName);
+  return {name,skill:byName.get(name)};
+ })).filter(row=>row.name);
+ const issues:FormalFormationSkillIssue[]=[];
+
+ for(const row of equipped){
+  if(!row.skill){
+   issues.push({code:'unknown-skill',skillNames:[row.name],message:`「${row.name}」を正本戦法データで確認できません。正本候補から選び直してください。`});
+   continue;
+  }
+  if(row.skill.attachable===false){
+   issues.push({code:'not-attachable',skillNames:[row.name],message:`「${row.name}」は装着戦法として使用できません。`});
+  }
+ }
+
+ const resolved=equipped.filter((row):row is {name:string;skill:FormalSkillRecord}=>Boolean(row.skill));
+ const unitTypeSkills=resolved.filter(row=>formalSlotType(row.skill)==='unitType');
+ if(unitTypeSkills.length>1){
+  const names=unitTypeSkills.map(row=>row.name);
+  issues.push({code:'unit-type-skill-limit',skillNames:names,message:`兵種戦法は1編成に1つまでです。${names.map(name=>`「${name}」`).join('・')}を同時には装着できません。いずれか1つだけを残してください。`});
+ }
+ const formationSkills=resolved.filter(row=>formalSlotType(row.skill)==='formation');
+ if(formationSkills.length>1){
+  const names=formationSkills.map(row=>row.name);
+  issues.push({code:'formation-skill-limit',skillNames:names,message:`陣形戦法は1編成に1つまでです。${names.map(name=>`「${name}」`).join('・')}を同時には装着できません。いずれか1つだけを残してください。`});
+ }
+ for(const row of resolved){
+  const allowed=row.skill.allowedUnitTypes??[];
+  if(allowed.length>0&&!allowed.includes(troopType)){
+   issues.push({code:'unit-type-mismatch',skillNames:[row.name],message:`「${row.name}」は${allowed.join('・')}専用のため、${troopType}編成では使用できません。`});
+  }
+ }
+ return issues;
 }
 
 export function calculateTroopLevel(

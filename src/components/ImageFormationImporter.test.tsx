@@ -10,7 +10,7 @@ const officers:CanonicalOfficer[]=[
  {id:'3',name:'柿崎景家',inherentSkill:'越後二天',unitLevelTraits:[]},
 ];
 const names=['一行三昧','回天転運','会盟の陣','以戦養戦','乗勝追撃','縦横馳突'];
-const skills:CanonicalSkill[]=names.map((name,index)=>({id:String(index),name,type:'能動',attachable:true,unitLevelEffects:[]}));
+const skills:CanonicalSkill[]=names.map((name,index)=>({id:String(index),name,type:'能動',attachable:true,slotType:'normal',allowedUnitTypes:[],unitLevelEffects:[]}));
 
 beforeEach(()=>{
  vi.stubGlobal('URL',{createObjectURL:vi.fn(()=>'/preview.png'),revokeObjectURL:vi.fn()});

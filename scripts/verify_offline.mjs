@@ -19,6 +19,7 @@ if(!worker.includes("from battle_simulator import simulate_once")||!worker.inclu
 if(!worker.includes('def calculate_batch(request_json):')||!worker.includes("required=max(1,min(10")||!worker.includes("'calculateBatch':calculate_batch")||!worker.includes("run_operation(operation_js,request_json_js)"))throw new Error('runtime worker does not expose the iPhone-safe streaming battle batch lane');
 if(!worker.includes("_run_direction(ctx,candidate,target,'forward',forward_seed,required)")||!worker.includes("_run_direction(ctx,candidate,target,'reverse',reverse_seed,required)"))throw new Error('runtime worker does not execute balanced forward and reverse canonical batches');
 if(!worker.includes("os.remove('/runtime.tgz')")||!worker.includes('def _run_compact_detail(')||!worker.includes('python_traceback=')||!worker.includes('request_context='))throw new Error('runtime worker is missing the single-worker memory release, compact trace, or structured Safari error lane');
+if(!worker.includes("if 'FORMAL_BATTLE_INPUT_CONTRACT_STOP' in error_text")||!worker.includes('formationAUnit:request.candidate?.unit'))throw new Error('runtime worker does not fail fast for deterministic formal-input errors or report the formation unit');
 if(!worker.includes("'battle_evaluation':{'schemaVersion':1")||!worker.includes("'max_turns':8"))throw new Error('runtime worker does not retain T1-T8 battle examples');
 if(!worker.includes("if wins>0")||!worker.includes("if losses>0"))throw new Error('runtime worker does not retain one available win and loss example');
 if(bundleSha!==lock.runtimeBundleSha256)throw new Error(`runtime bundle SHA mismatch: ${bundleSha}`);
@@ -37,6 +38,8 @@ if(skillCatalog.canonicalVersion!==lock.canonicalVersion||skillCatalog.canonical
 if(!Array.isArray(skillCatalog.skills)||skillCatalog.skillCount!==skillCatalog.skills.length)throw new Error('canonical skill catalog is malformed');
 const skillByName=new Map(skillCatalog.skills.map(skill=>[skill.name,skill]));
 if(skillByName.get('梟雄の計')?.attachable!==false||skillByName.get('紅蓮の炎')?.attachable!==true)throw new Error('canonical skill attachability is malformed');
+if(skillByName.get('僧兵')?.slotType!=='unitType'||skillByName.get('僧兵')?.allowedUnitTypes?.join('|')!=='足軽')throw new Error('canonical unit-type restriction missing: 僧兵');
+if(skillByName.get('鉄砲僧兵')?.slotType!=='unitType'||skillByName.get('鉄砲僧兵')?.allowedUnitTypes?.join('|')!=='鉄砲')throw new Error('canonical unit-type restriction missing: 鉄砲僧兵');
 if(!skillCatalog.skills.every(skill=>Array.isArray(skill.unitLevelEffects)))throw new Error('canonical skill unit-level effects are malformed');
 if(manifest.display!=='standalone'||manifest.orientation!=='portrait'||manifest.start_url!=='/nobu-shinsen-app/')throw new Error('PWA manifest is not configured for iPhone standalone launch');
 for(const size of ['192x192','512x512'])if(!manifest.icons?.some(icon=>icon.sizes===size&&icon.type==='image/png'))throw new Error(`PWA manifest missing PNG icon: ${size}`);

@@ -61,7 +61,18 @@ def as_bool(value)->bool:
 def unit_targets(value)->list[str]:
     text=str(value or '').strip()
     if text in {'全兵種','すべて','ALL','all'}:return sorted(UNIT_TYPES)
-    return sorted({part.strip() for part in re.split(r'[/／,、]',text) if part.strip() in UNIT_TYPES})
+    return sorted({part.strip() for part in re.split(r'[|/／,、]',text) if part.strip() in UNIT_TYPES})
+
+
+def attach_slot_type(value)->str:
+    raw=str(value or 'normal').strip()
+    mapped={
+        'normal':'normal','unit_type':'unitType','formation':'formation',
+        'intrinsic_only':'normal','intrinsic_only_blocked':'normal',
+        'frozen_or_inactive':'normal','internal_state_tag':'normal',
+    }.get(raw)
+    if mapped is None:raise SystemExit(f'canonical skill has unknown attach slot type: {value!r}')
+    return mapped
 
 
 def unlocked_at(value)->int:
@@ -159,7 +170,12 @@ def build_skill_catalog(rows:list[dict],effect_rows:list[dict])->dict:
         attachable=str(row.get('is_attachable') or '').strip().lower()=='true'
         if not name or not skill_id:continue
         current=skills.get(name)
-        entry={'id':skill_id,'name':name,'type':skill_type,'attachable':attachable,'unitLevelEffects':[]}
+        entry={
+            'id':skill_id,'name':name,'type':skill_type,'attachable':attachable,
+            'slotType':attach_slot_type(row.get('attach_slot_type')),
+            'allowedUnitTypes':unit_targets(row.get('allowed_unit_types')),
+            'unitLevelEffects':[],
+        }
         if current and {k:v for k,v in current.items() if k!='unitLevelEffects'}!={k:v for k,v in entry.items() if k!='unitLevelEffects'}:
             raise SystemExit(f'canonical skill catalog conflict: {name}: {current} != {entry}')
         skills[name]=current or entry
@@ -182,6 +198,7 @@ def build_skill_catalog(rows:list[dict],effect_rows:list[dict])->dict:
         'canonicalArchiveSha256':LOCK['archiveSha256'],
         'sourceFields':{
             'id':'canonical_skill_id/skill_id','name':'skill_name','type':'skill_type','attachable':'is_attachable',
+            'slotType':'attach_slot_type','allowedUnitTypes':'allowed_unit_types',
             'unitLevelBonus':'兵種Lv加算/unit_level_bonus','unitLevelCapUnlock':'上限解放/unit_level_cap_unlock',
             'unitLevelUnitTypes':'対象兵種/unit_level_unit_types',
         },

@@ -103,7 +103,10 @@ def _run_direction(ctx,candidate,target,direction,seed_start,required=50):
             gc.collect()
             raise
         except Exception as error:
-            failures.append({'seed':current_seed,'error':str(error)[:300]})
+            error_text=str(error)
+            if 'FORMAL_BATTLE_INPUT_CONTRACT_STOP' in error_text:
+                raise RuntimeError(f'{direction}の正本入力が戦闘開始条件を満たしません: {error_text}') from error
+            failures.append({'seed':current_seed,'error':error_text[:300]})
             continue
         winner=result.get('winner')
         if winner=='A': left_wins+=1
@@ -206,6 +209,6 @@ def run_operation(operation,request_json):
     finally:
         gc.collect()
 `);ready=true;self.postMessage({type:'ready'});}
-function requestContext(msg){const request=msg.request||{};return {operation:msg.type,trials:request.trials,forwardSeed:request.forward_seed,reverseSeed:request.reverse_seed,seed:request.seed,direction:request.direction,formationA:request.candidate?.officers,formationASkills:request.candidate?.skills,formationB:request.target_spec?.officers,formationBSkills:request.target_spec?.skills};}
+function requestContext(msg){const request=msg.request||{};return {operation:msg.type,trials:request.trials,forwardSeed:request.forward_seed,reverseSeed:request.reverse_seed,seed:request.seed,direction:request.direction,formationA:request.candidate?.officers,formationAUnit:request.candidate?.unit,formationASkills:request.candidate?.skills,formationB:request.target_spec?.officers,formationBUnit:request.target_spec?.unit,formationBSkills:request.target_spec?.skills};}
 function serializeRuntimeError(error,msg,stage){const name=error?.name||'Error',message=error?.message||String(error),stack=error?.stack||'';return [`worker_stage=${stage}`,`request_context=${JSON.stringify(requestContext(msg))}`,`error_name=${name}`,`error_message=${message}`,stack&&`error_stack=${stack}`].filter(Boolean).join('\n');}
 self.onmessage=async(event)=>{const msg=event.data||{};let stage='initialize';try{await init(msg.bundleUrl);stage='execute';pyodide.globals.set('request_json_js',JSON.stringify(msg.request));pyodide.globals.set('operation_js',String(msg.type));const raw=await pyodide.runPythonAsync('run_operation(operation_js,request_json_js)');if(typeof raw!=='string')throw new Error('runtime returned a non-string response');if(raw.startsWith('__NOBU_PYTHON_ERROR__:')){const payload=JSON.parse(raw.slice('__NOBU_PYTHON_ERROR__:'.length));throw new Error([`python_operation=${payload.operation}`,`python_error_type=${payload.python_error_type}`,`python_error_message=${payload.python_error_message}`,`python_traceback=${payload.python_traceback}`].join('\n'));}stage='respond';self.postMessage({type:'result',requestId:msg.requestId,result:JSON.parse(raw)});}catch(error){self.postMessage({type:'error',requestId:msg.requestId,message:serializeRuntimeError(error,msg,stage)});}finally{try{pyodide?.globals.delete('request_json_js');pyodide?.globals.delete('operation_js');}catch{}}};

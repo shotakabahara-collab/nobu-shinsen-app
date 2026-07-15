@@ -12,11 +12,11 @@ const canonical:CanonicalOfficer[]=[
  {id:'WL_SAKAKIBARA_YASUMASA',name:'榊原康政',inherentSkill:'無傷の誇',unitLevelTraits:[{name:'馬術Ⅲ',unlockedAt:0,unitTypes:['騎馬'],levelBonus:3,capUnlock:false,capBonus:0}]},
 ];
 const canonicalSkills:CanonicalSkill[]=[
- {id:'KNY_INHERENT_1',name:'梟雄の計',type:'固有',attachable:false,unitLevelEffects:[]},
- {id:'KNY_INHERENT_2',name:'七十二の計',type:'固有',attachable:false,unitLevelEffects:[]},
- {id:'KNY_0001',name:'紅蓮の炎',type:'能動',attachable:true,unitLevelEffects:[]},
- {id:'KNY_0002',name:'回天転運',type:'能動',attachable:true,unitLevelEffects:[]},
- {id:'KNY_0003',name:'一行三昧',type:'能動',attachable:true,unitLevelEffects:[]},
+ {id:'KNY_INHERENT_1',name:'梟雄の計',type:'固有',attachable:false,slotType:'normal',allowedUnitTypes:[],unitLevelEffects:[]},
+ {id:'KNY_INHERENT_2',name:'七十二の計',type:'固有',attachable:false,slotType:'normal',allowedUnitTypes:[],unitLevelEffects:[]},
+ {id:'KNY_0001',name:'紅蓮の炎',type:'能動',attachable:true,slotType:'normal',allowedUnitTypes:[],unitLevelEffects:[]},
+ {id:'KNY_0002',name:'回天転運',type:'能動',attachable:true,slotType:'normal',allowedUnitTypes:[],unitLevelEffects:[]},
+ {id:'KNY_0003',name:'一行三昧',type:'能動',attachable:true,slotType:'normal',allowedUnitTypes:[],unitLevelEffects:[]},
 ];
 
 function editor(props:Partial<React.ComponentProps<typeof FormationEditor>>={}){
@@ -131,6 +131,24 @@ describe('FormationEditor',()=>{
   fireEvent.click(screen.getByRole('button',{name:'保存'}));
   expect(save).not.toHaveBeenCalled();
   expect(screen.getByRole('alertdialog')).toHaveTextContent('修正するまで保存できません');
+ });
+
+ it('blocks saving the reported double unit-type skill formation with an actionable warning',()=>{
+  const value=completeFormation();value.troopType='鉄砲';
+  value.warriors[0].equippedSkills=['有備無患','破天の轟'];
+  value.warriors[1].equippedSkills=['僧兵','攻其不備'];
+  value.warriors[2].equippedSkills=['大智不智','鉄砲僧兵'];
+  const normalSkills=['有備無患','破天の轟','攻其不備','大智不智'].map((name,index):CanonicalSkill=>({id:`N${index}`,name,type:'能動',attachable:true,slotType:'normal',allowedUnitTypes:[],unitLevelEffects:[]}));
+  const restrictedSkills:CanonicalSkill[]=[
+   {id:'U1',name:'僧兵',type:'兵種',attachable:true,slotType:'unitType',allowedUnitTypes:['足軽'],unitLevelEffects:[]},
+   {id:'U2',name:'鉄砲僧兵',type:'兵種',attachable:true,slotType:'unitType',allowedUnitTypes:['鉄砲'],unitLevelEffects:[]},
+  ];
+  const save=vi.fn();render(editor({initial:value,canonicalSkills:[...canonicalSkills,...normalSkills,...restrictedSkills],onSave:save}));
+  expect(screen.getByRole('alert')).toHaveTextContent('兵種戦法は1編成に1つまで');
+  expect(screen.getByRole('alert')).toHaveTextContent('「僧兵」は足軽専用');
+  fireEvent.click(screen.getByRole('button',{name:'保存'}));
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByRole('alertdialog')).toHaveTextContent('正本ルールにより保存できません');
  });
 
  it('autofills and locks the inherent skill when a canonical warrior name matches',()=>{

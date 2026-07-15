@@ -9,7 +9,7 @@ const officers:CanonicalOfficer[]=[
  {id:'2',name:'柴田勝家',inherentSkill:'瓶割り柴田',unitLevelTraits:[]},
  {id:'3',name:'柿崎景家',inherentSkill:'越後二天',unitLevelTraits:[]},
 ];
-const skill=(id:string,name:string,attachable=true):CanonicalSkill=>({id,name,type:attachable?'能動':'固有',attachable,unitLevelEffects:[]});
+const skill=(id:string,name:string,attachable=true):CanonicalSkill=>({id,name,type:attachable?'能動':'固有',attachable,slotType:'normal',allowedUnitTypes:[],unitLevelEffects:[]});
 const skills=[skill('a','一行三昧'),skill('b','回天転運'),skill('c','会盟の陣'),skill('d','以戦養戦'),skill('e','乗勝追撃'),skill('f','縦横馳突'),skill('g','越後二天',false)];
 const segmentedPage=(slot:0|1|2,row:'card'|'inherent'|'equipped1'|'equipped2',text:string,options:Partial<OcrPage>={}):OcrPage=>({slot,row,layout:'three-card',text,...options});
 
