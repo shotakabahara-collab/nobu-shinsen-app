@@ -13,15 +13,17 @@ let loader:Promise<TesseractGlobal>|null=null;
 function loadTesseract():Promise<TesseractGlobal>{
  if(window.Tesseract)return Promise.resolve(window.Tesseract);
  if(loader)return loader;
- loader=new Promise((resolve,reject)=>{
+ const pending=new Promise<TesseractGlobal>((resolve,reject)=>{
   const existing=document.querySelector<HTMLScriptElement>(`script[src="${TESSERACT_SCRIPT}"]`);
   const script=existing??document.createElement('script');
   const finish=()=>window.Tesseract?resolve(window.Tesseract):reject(new Error('画像認識エンジンを初期化できませんでした'));
   script.addEventListener('load',finish,{once:true});
   script.addEventListener('error',()=>reject(new Error('画像認識エンジンを読み込めませんでした。通信状態を確認してください。')),{once:true});
   if(!existing){script.src=TESSERACT_SCRIPT;script.crossOrigin='anonymous';script.defer=true;document.head.appendChild(script);}
- }).catch(error=>{loader=null;throw error;});
- return loader;
+ });
+ const cached=pending.catch((error:unknown)=>{loader=null;throw error;});
+ loader=cached;
+ return cached;
 }
 
 async function downscale(file:File):Promise<File|Blob>{
