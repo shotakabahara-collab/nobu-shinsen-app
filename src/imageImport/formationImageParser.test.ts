@@ -24,6 +24,28 @@ describe('parseFormationImages',()=>{
   expect(draft.warnings).toEqual([]);
  });
 
+ it('parses each column of the supplied firearm formation screen independently',()=>{
+  const cardOfficers:CanonicalOfficer[]=[
+   {id:'h',name:'本願寺顕如',inherentSkill:'一切皆空',unitLevelTraits:[]},
+   {id:'s',name:'鈴木佐大夫',inherentSkill:'弾嵐雨霰',unitLevelTraits:[]},
+   {id:'t',name:'妻木熙子',inherentSkill:'内助の賢',unitLevelTraits:[]},
+  ];
+  const cardSkills=[skill('i1','一切皆空',false),skill('i2','弾嵐雨霰',false),skill('i3','内助の賢',false),skill('p','破天の轟'),skill('c','城盗り'),skill('y','有備無患'),skill('g','草木皆兵'),skill('e','姻戚同盟'),skill('m','鉄砲僧兵')];
+  const draft=parseFormationImages([
+   {slot:0,layout:'three-card',limitBreak:2,limitBreakConfidence:'high',limitBreakEvidence:'赤い凸マーク2個を画像から検出',text:'大将 7 本願寺顕如 48 鉄砲 LV0 一切皆空 破天の轟 城盗り'},
+   {slot:1,layout:'three-card',limitBreak:5,limitBreakConfidence:'high',limitBreakEvidence:'赤い凸マーク5個を画像から検出',text:'副将 6 鈴木佐大夫 50 鉄砲 LV3 弾嵐雨霰 有備無患 草木皆兵'},
+   {slot:2,layout:'three-card',limitBreak:5,limitBreakConfidence:'high',limitBreakEvidence:'赤い凸マーク5個を画像から検出',text:'副将 6 妻木熙子 40 鉄砲 LV3 内助の賢 姻戚同盟 鉄砲僧兵'},
+  ],cardOfficers,cardSkills);
+  expect(draft.troopType).toMatchObject({value:'鉄砲',confidence:'high'});
+  expect(draft.warriors.map(warrior=>warrior.name.value)).toEqual(['本願寺顕如','鈴木佐大夫','妻木熙子']);
+  expect(draft.warriors.map(warrior=>warrior.limitBreak.value)).toEqual([2,5,5]);
+  expect(draft.warriors[0].equippedSkills.map(value=>value.value)).toEqual(['破天の轟','城盗り']);
+  expect(draft.warriors[1].equippedSkills.map(value=>value.value)).toEqual(['有備無患','草木皆兵']);
+  expect(draft.warriors[2].equippedSkills.map(value=>value.value)).toEqual(['姻戚同盟','鉄砲僧兵']);
+  expect(draft.warriors.flatMap(warrior=>warrior.equippedSkills).map(value=>value.value)).not.toContain('一切皆空');
+  expect(draft.warnings).toEqual([]);
+ });
+
  it('never treats inherent skills as equipped-skill candidates',()=>{
   const draft=parseFormationImages([{text:'騎馬 山本勘助 柴田勝家 柿崎景家 越後二天 一行三昧 回天転運'}],officers,skills);
   expect(draft.warriors.flatMap(warrior=>warrior.equippedSkills).map(value=>value.value)).not.toContain('越後二天');
