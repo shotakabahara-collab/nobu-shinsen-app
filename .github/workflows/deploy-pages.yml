@@ -56,7 +56,10 @@ jobs:
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}runtime-worker.js" -o /tmp/runtime-worker.js
           grep -Fq 'browser_runtime_api' /tmp/runtime-worker.js
           grep -Fq 'calculate_batch' /tmp/runtime-worker.js
-          grep -Fq "calculateBatch:'calculate_batch'" /tmp/runtime-worker.js
+          grep -Fq "'calculateBatch':calculate_batch" /tmp/runtime-worker.js
+          grep -Fq 'run_operation(operation_js,request_json_js)' /tmp/runtime-worker.js
+          grep -Fq 'def _run_compact_detail' /tmp/runtime-worker.js
+          grep -Fq 'python_traceback=' /tmp/runtime-worker.js
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}runtime_bundle_b223.tgz" -o /tmp/runtime_bundle_b223.tgz
           echo "${expected_bundle_sha}  /tmp/runtime_bundle_b223.tgz" | sha256sum --check --strict
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}canonical_officer_catalog.json" -o /tmp/canonical_officer_catalog.json
@@ -104,14 +107,14 @@ jobs:
               '',
               '- 公開HTMLタイトル',
               '- PWA manifest / standalone設定',
-              '- runtime-worker.js / canonical adapter参照・iPhone向け分割実行lane',
+              '- runtime-worker.js / canonical adapter参照・単一worker分割実行・compact trace・Safari例外保持lane',
               '- runtime_bundle_b223.tgz / release lock SHA一致',
               '- canonical_officer_catalog.json / 固有・凸別兵種Lv特性・無天井の上限解放ルール一致',
               '- canonical_officer_stats_catalog.json / 凸別ステ振り後4能力・行動順用速度一致',
               '- canonical_skill_catalog.json / 固有装着不可・装着可能戦法・戦法由来兵種Lv効果lane一致',
               '',
               passed
-                ? '機械検証範囲はリリースPASSです。物理iPhoneでは100戦の分割完走、Battle Log詳細のT1〜T8行動・兵数増減を確認してください。'
+                ? '機械検証範囲はリリースPASSです。物理iPhoneでは単一workerによる100戦の分割完走、Battle Log詳細のT1〜T8行動・兵数増減を確認してください。'
                 : '公開工程またはsmokeに失敗しています。GitHub ActionsのDeploy GitHub Pagesログを確認してください。',
             ].join('\n');
             const params = {

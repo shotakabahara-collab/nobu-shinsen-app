@@ -1,18 +1,52 @@
 let pyodide=null,ready=false;
 const PYODIDE_BASE=new URL('pyodide/',self.location.href).href;
 async function init(bundleUrl){if(ready)return;importScripts(PYODIDE_BASE+'pyodide.js');pyodide=await loadPyodide({indexURL:PYODIDE_BASE});const response=await fetch(bundleUrl);if(!response.ok)throw new Error(`runtime bundle HTTP ${response.status}`);pyodide.FS.writeFile('/runtime.tgz',new Uint8Array(await response.arrayBuffer()));await pyodide.runPythonAsync(`
-import copy,gc,json,os,sys,tarfile,time
+import copy,gc,json,os,sys,tarfile,time,traceback
 os.makedirs('/nobu',exist_ok=True)
 with tarfile.open('/runtime.tgz','r:gz') as tf: tf.extractall('/nobu')
+os.remove('/runtime.tgz')
 os.chdir('/nobu/02_ENGINE');sys.path.insert(0,'/nobu/02_ENGINE')
 from browser_runtime_api import search,formal,_ctx,_make,TARGETS
+import battle_simulator as _battle_runtime
 from battle_simulator import simulate_once
+
+_RUNTIME_ERROR_PREFIX='__NOBU_PYTHON_ERROR__:'
+
+def _compact_action_state(ctx,side,idx,skills):
+    return {
+        'hp':round(side.hp[idx],2),
+        'controls':dict(side.controls[idx]),
+        'speed_breakdown':_battle_runtime.speed_breakdown_for_action(ctx,side,idx),
+    }
+
+def _compact_record_trace_event(trace,turn,phase,side=None,actor_idx=None,actor_name=None,event_type='event',detail=None):
+    if trace is None or event_type not in {'actor_begin','activation_roll','blocked','confusion_redirect','prepare_resolve_at_actor_action','after_normal_attack_skipped'}:
+        return
+    row={'phase':phase,'event_type':event_type}
+    if side is not None:row['side']=side
+    if actor_idx is not None:row['actor_idx']=actor_idx
+    if actor_name is not None:row['actor']=actor_name
+    if detail is not None:row['detail']=detail
+    trace.setdefault('turns',{}).setdefault(str(turn),{}).setdefault('events',[]).append(row)
+
+def _run_compact_detail(ctx,left,right,seed):
+    names=('battle_static_decomposition_for_trace','snapshot_side_state','action_state_for_trace','record_trace_event')
+    original={name:getattr(_battle_runtime,name) for name in names}
+    try:
+        _battle_runtime.battle_static_decomposition_for_trace=lambda *args,**kwargs:{'capture':'compact-browser-detail-v2'}
+        _battle_runtime.snapshot_side_state=lambda *args,**kwargs:{}
+        _battle_runtime.action_state_for_trace=_compact_action_state
+        _battle_runtime.record_trace_event=_compact_record_trace_event
+        return simulate_once(ctx,copy.deepcopy(left),copy.deepcopy(right),seed=int(seed),verbose=True,trace_enabled=True,runtime_mode='full_trace')
+    finally:
+        for name,value in original.items():setattr(_battle_runtime,name,value)
 
 def _detail_payload(req,direction,seed):
     candidate=_make(req['candidate'])
     target=_make(req.get('target_spec') or TARGETS[req['target']])
     left,right=(target,candidate) if direction=='reverse' else (candidate,target)
-    result=simulate_once(_ctx(),copy.deepcopy(left),copy.deepcopy(right),seed=int(seed),verbose=True,trace_enabled=True,runtime_mode='full_trace')
+    gc.collect()
+    result=_run_compact_detail(_ctx(),left,right,seed)
     trace=result.get('trace') or {}
     turns={}
     for key,value in (trace.get('turns') or {}).items():
@@ -32,12 +66,15 @@ def _detail_payload(req,direction,seed):
             'events':compact_events,
         }
     logs=[str(line) for line in (result.get('logs') or []) if str(line).startswith('T')]
-    return {
+    payload={
         'type':'battle_detail','version':'detail-v1','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE',
         'direction':direction,'seed':int(seed),'winner':result.get('winner'),'win_reason':result.get('win_reason'),
         'ended_turn':result.get('ended_turn'),'max_turns':8,'hp_diff':result.get('hp_diff'),
         'final_scoreboard':result.get('final_scoreboard'),'turns':turns,'logs':logs,
     }
+    del result,trace,turns,logs,candidate,target,left,right
+    gc.collect()
+    return payload
 
 def detail(request_json):
     req=json.loads(request_json) if isinstance(request_json,str) else request_json
@@ -104,12 +141,14 @@ def calculate_batch(request_json):
     forward=_run_direction(ctx,candidate,target,'forward',forward_seed,required)
     reverse=_run_direction(ctx,candidate,target,'reverse',reverse_seed,required)
     payload={
-        'type':'simulation_batch','version':'batch-v1-isolated-worker','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE',
+        'type':'simulation_batch','version':'batch-v2-streaming-worker','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE',
         'trials_per_direction':required,'forward':_batch_direction_public(forward),'reverse':_batch_direction_public(reverse),
         'candidate_assignment':candidate.get('attach_assignment'),'formal_status':candidate.get('formal_status'),
     }
+    raw=json.dumps(payload,ensure_ascii=False)
+    del payload,forward,reverse,candidate,target,ctx
     gc.collect()
-    return json.dumps(payload,ensure_ascii=False)
+    return raw
 
 def calculate_100(request_json):
     req=json.loads(request_json) if isinstance(request_json,str) else dict(request_json)
@@ -153,5 +192,20 @@ def calculate_100(request_json):
         'battle_evaluation':{'schemaVersion':1,'summary':summary,'examples':examples},
     }
     return json.dumps(payload,ensure_ascii=False)
+
+def run_operation(operation,request_json):
+    try:
+        fn={'calculate':calculate_100,'calculateBatch':calculate_batch,'search':search,'formal':formal,'detail':detail}.get(str(operation))
+        if fn is None:raise ValueError(f'unknown operation: {operation}')
+        return fn(request_json)
+    except BaseException as error:
+        try:python_traceback=traceback.format_exc()
+        except BaseException:python_traceback=f'{type(error).__name__}: {error}'
+        payload={'operation':str(operation),'python_error_type':type(error).__name__,'python_error_message':str(error),'python_traceback':python_traceback}
+        return _RUNTIME_ERROR_PREFIX+json.dumps(payload,ensure_ascii=False)
+    finally:
+        gc.collect()
 `);ready=true;self.postMessage({type:'ready'});}
-self.onmessage=async(event)=>{const msg=event.data||{};try{await init(msg.bundleUrl);pyodide.globals.set('request_json_js',JSON.stringify(msg.request));const fn={calculate:'calculate_100',calculateBatch:'calculate_batch',search:'search',formal:'formal',detail:'detail'}[msg.type];if(!fn)throw new Error(`unknown operation: ${msg.type}`);const raw=await pyodide.runPythonAsync(`${fn}(request_json_js)`);self.postMessage({type:'result',requestId:msg.requestId,result:JSON.parse(raw)});}catch(error){self.postMessage({type:'error',requestId:msg.requestId,message:error?.stack||String(error)});}};
+function requestContext(msg){const request=msg.request||{};return {operation:msg.type,trials:request.trials,forwardSeed:request.forward_seed,reverseSeed:request.reverse_seed,seed:request.seed,direction:request.direction,formationA:request.candidate?.officers,formationASkills:request.candidate?.skills,formationB:request.target_spec?.officers,formationBSkills:request.target_spec?.skills};}
+function serializeRuntimeError(error,msg,stage){const name=error?.name||'Error',message=error?.message||String(error),stack=error?.stack||'';return [`worker_stage=${stage}`,`request_context=${JSON.stringify(requestContext(msg))}`,`error_name=${name}`,`error_message=${message}`,stack&&`error_stack=${stack}`].filter(Boolean).join('\n');}
+self.onmessage=async(event)=>{const msg=event.data||{};let stage='initialize';try{await init(msg.bundleUrl);stage='execute';pyodide.globals.set('request_json_js',JSON.stringify(msg.request));pyodide.globals.set('operation_js',String(msg.type));const raw=await pyodide.runPythonAsync('run_operation(operation_js,request_json_js)');if(typeof raw!=='string')throw new Error('runtime returned a non-string response');if(raw.startsWith('__NOBU_PYTHON_ERROR__:')){const payload=JSON.parse(raw.slice('__NOBU_PYTHON_ERROR__:'.length));throw new Error([`python_operation=${payload.operation}`,`python_error_type=${payload.python_error_type}`,`python_error_message=${payload.python_error_message}`,`python_traceback=${payload.python_traceback}`].join('\n'));}stage='respond';self.postMessage({type:'result',requestId:msg.requestId,result:JSON.parse(raw)});}catch(error){self.postMessage({type:'error',requestId:msg.requestId,message:serializeRuntimeError(error,msg,stage)});}finally{try{pyodide?.globals.delete('request_json_js');pyodide?.globals.delete('operation_js');}catch{}}};
