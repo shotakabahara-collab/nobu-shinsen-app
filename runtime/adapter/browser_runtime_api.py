@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import copy, itertools, json, time
+import copy, itertools, json, re, time
 from custom_evaluate import load_context, resolve_officers_by_awaken_values, resolve_skills, build_best, public_best
-from battle_simulator import simulate_many_balanced
+from battle_simulator import simulate_many_balanced, simulate_once
 
 _CTX=None
 def _ctx():
@@ -33,12 +33,189 @@ TARGETS={
 'KURODA':{'officers':['黒田官兵衛','豊臣秀吉','ねね'],'awaken':[3,1,3],'unit':'弓','skills':['七十二の計','紅蓮の炎','三河弓兵隊','嚢沙之計','罵詈雑言','沈魚落雁']},
 'YAMAMOTO':{'officers':['山本勘助','柴田勝家','柿崎景家'],'awaken':[2,1,2],'unit':'騎馬','skills':['一行三昧','回天転運','会盟の陣','以戦養戦','乗勝追撃','縦横馳突']}}
 
+_TURN_LINE_RE=re.compile(r'^T([0-8])\s+([AB]):([^\s]+)\s+(.+)$')
+_LOSS_RE=re.compile(r'^T([1-8])\s+([AB]):([^\s]+)\s+損害内訳\s+source=(.*?)\s+loss=([0-9.]+).*?wounded=([0-9.]+)')
+_HEAL_RE=re.compile(r'^T([1-8])\s+([AB]):([^\s]+)\s+負傷兵回復\s+source=(.*?)\s+heal=([0-9.]+)\s+wounded_remain=([0-9.]+)')
+
+def _canonical_side(direction, raw):
+    if raw not in {'A','B'}:return raw
+    return raw if direction=='forward' else ('B' if raw=='A' else 'A')
+
+def _canonical_text(direction, value):
+    text=str(value or '')
+    if direction!='reverse':return text
+    return text.replace('A:','__RAW_A__:').replace('B:','A:').replace('__RAW_A__:','B:')
+
+def _battle_summary(sim, requested_per_direction):
+    wins=losses=draws=completed=failures=0
+    for direction in ('forward','reverse'):
+        for block in sim.get(direction,[]) or []:
+            completed+=int(block.get('completed_trials') or 0)
+            failures+=len(block.get('runtime_failures') or [])
+            if direction=='forward':
+                wins+=int(block.get('left_wins') or 0);losses+=int(block.get('right_wins') or 0)
+            else:
+                wins+=int(block.get('right_wins') or 0);losses+=int(block.get('left_wins') or 0)
+            draws+=int(block.get('draws') or 0)
+    requested=int(requested_per_direction)*2
+    return {
+        'requestedBattles':requested,'completedBattles':completed,'wins':wins,'losses':losses,'draws':draws,
+        'winRate':round(wins/max(1,completed),4),'perDirectionBattles':int(requested_per_direction),'runtimeFailures':failures,
+        'evaluation':'SIDE_BALANCED_EQUAL_FORWARD_REVERSE_COUNTS',
+    }
+
+def _compact_team(raw_team, canonical):
+    raw_team=raw_team if isinstance(raw_team,dict) else {}
+    officers=[]
+    for row in raw_team.get('officers',[]) or []:
+        if not isinstance(row,dict):continue
+        officers.append({
+            'side':canonical,'role':row.get('role') or '', 'name':row.get('name') or '未確認',
+            'troops':round(float(row.get('hp') or 0),2),'maxTroops':round(float(row.get('max_hp') or 10000),2),
+            'alive':bool(row.get('alive')),'isCommander':bool(row.get('is_commander')),
+        })
+    return {'side':canonical,'totalTroops':round(float(raw_team.get('team_total_hp') or 0),2),'officers':officers}
+
+def _compact_scoreboard(raw, direction):
+    if not isinstance(raw,dict):return None
+    result={}
+    for raw_side in ('A','B'):
+        canonical=_canonical_side(direction,raw_side)
+        result[canonical]=_compact_team(raw.get(raw_side),canonical)
+    return result if 'A' in result and 'B' in result else None
+
+def _compact_action_order(raw_turn, direction):
+    if not isinstance(raw_turn,dict):return []
+    rows=[]
+    for row in raw_turn.get('action_order',[]) or []:
+        if not isinstance(row,dict):continue
+        rows.append({
+            'rank':int(row.get('rank') or 0),'side':_canonical_side(direction,row.get('side')),
+            'officer':row.get('officer') or '未確認','role':('大将','副将1','副将2')[int(row.get('idx') or 0)] if int(row.get('idx') or 0) in (0,1,2) else '',
+            'effectiveSpeed':row.get('effective_speed'),
+            'baseSpeed':row.get('base_speed'),'timedSpeedBonus':row.get('timed_speed_bonus') or 0,
+            'persistentSpeedBonus':row.get('persistent_speed_bonus') or 0,
+        })
+    return sorted(rows,key=lambda row:row['rank'])
+
+def _event_type(body):
+    if ' heal ' in body or '回復' in body:return 'heal'
+    if 'DOT ' in body:return 'dot'
+    if '行動阻害' in body or '通常攻撃不可' in body:return 'blocked'
+    if '準備開始' in body:return 'prepare'
+    if 'cleanse ' in body:return 'cleanse'
+    if ' -> ' in body:return 'action'
+    return 'status'
+
+def _display_action(body):
+    if 'ACTION_ORDER' in body or 'damage_formula=' in body or '残兵与ダメージ係数=' in body:return False
+    markers=(' -> ',' heal ','DOT ','準備開始','準備完了','行動阻害','cleanse ','buff applied',' activated ',
+             '連撃通常攻撃','通常攻撃不可','混乱対象ズレ','挑発誘導','制御無効','control_immune','回避','会心','奇策',
+             'cooldown_skip','post_fire_rest')
+    return any(marker in body for marker in markers)
+
+def _troop_change(match, direction, kind):
+    turn=int(match.group(1));side=_canonical_side(direction,match.group(2));officer=match.group(3);source=match.group(4)
+    amount=float(match.group(5));wounded_after=float(match.group(6));after=max(0.0,10000.0-wounded_after)
+    before=min(10000.0,after+amount) if kind=='loss' else max(0.0,after-amount)
+    delta=-amount if kind=='loss' else amount
+    return {
+        'turn':turn,'side':side,'officer':officer,'source':source,'before':round(before,2),'after':round(after,2),
+        'delta':round(delta,2),'kind':'loss' if kind=='loss' else 'recovery',
+    }
+
+def _compact_log_events(logs, direction):
+    by_turn={turn:[] for turn in range(1,9)}
+    sequence=0
+    for line in logs or []:
+        text=str(line);loss=_LOSS_RE.match(text);heal=_HEAL_RE.match(text)
+        if loss or heal:
+            change=_troop_change(loss or heal,direction,'loss' if loss else 'recovery');sequence+=1
+            sign='-' if change['delta']<0 else '+'
+            by_turn[change['turn']].append({
+                'sequence':sequence,'side':change['side'],'actor':change['officer'],'type':'troop_change',
+                'text':f"{change['officer']}：{change['source']}で兵数 {change['before']:.0f} → {change['after']:.0f}（{sign}{abs(change['delta']):.0f}）",
+                'troopChanges':[change],
+            })
+            continue
+        parsed=_TURN_LINE_RE.match(text)
+        if not parsed:continue
+        turn=int(parsed.group(1))
+        if turn<1 or turn>8:continue
+        body=parsed.group(4)
+        if not _display_action(body):continue
+        sequence+=1
+        by_turn[turn].append({
+            'sequence':sequence,'side':_canonical_side(direction,parsed.group(2)),'actor':parsed.group(3),
+            'type':_event_type(body),'text':_canonical_text(direction,body),'troopChanges':[],
+        })
+    # The protected runtime writes the exact loss/recovery row immediately before
+    # the human-readable action row. Merge those adjacent rows so the UI can show
+    # action content and its real troop delta together without inferring damage.
+    for turn,events in by_turn.items():
+        merged=[]
+        for event in events:
+            if event['type']!='troop_change' and merged and merged[-1]['type']=='troop_change':
+                change_event=merged[-1];change=change_event['troopChanges'][0]
+                if change['source'] in event['text'] or change['officer'] in event['text']:
+                    merged.pop();event['troopChanges']=change_event['troopChanges']
+            merged.append(event)
+        by_turn[turn]=merged
+    return by_turn
+
+def _compact_example(result, direction, seed):
+    trace=result.get('trace') or {};raw_turns=trace.get('turns') or {};ended=int(result.get('ended_turn') or 0)
+    events=_compact_log_events(result.get('logs') or [],direction);turns=[]
+    for turn in range(1,9):
+        raw_turn=raw_turns.get(str(turn)) if isinstance(raw_turns,dict) else None
+        raw_turn=raw_turn if isinstance(raw_turn,dict) else {}
+        start=_compact_scoreboard(raw_turn.get('scoreboard_start'),direction)
+        end_raw=raw_turn.get('scoreboard_end')
+        if turn==ended and not end_raw:end_raw=result.get('final_scoreboard')
+        turns.append({
+            'turn':turn,'played':turn<=ended,'status':'played' if turn<=ended else 'not_played_battle_ended',
+            'actionOrder':_compact_action_order(raw_turn,direction),'events':events.get(turn,[]),
+            'start':start,'end':_compact_scoreboard(end_raw,direction),
+        })
+    raw_winner=result.get('winner');winner=_canonical_side(direction,raw_winner) if raw_winner in {'A','B'} else 'draw'
+    return {
+        'schemaVersion':1,'direction':direction,'seed':int(seed),'outcome':'win' if winner=='A' else 'loss' if winner=='B' else 'draw',
+        'winner':winner,'winReason':result.get('win_reason') or '未確認','endedTurn':ended,'maxTurns':8,
+        'hpDiff':round(float(result.get('hp_diff') or 0)*(1 if direction=='forward' else -1),2),'turns':turns,
+    }
+
+def _representative_refs(sim):
+    refs=[];blocks=sim.get('timeline_trace_blocks') or {}
+    for direction in ('forward','reverse'):
+        for block in blocks.get(direction,[]) or []:
+            for rep in block.get('representative_traces',[]) or []:
+                if not isinstance(rep,dict) or rep.get('trace_rerun_failed') or rep.get('seed') is None:continue
+                raw=rep.get('winner');winner=_canonical_side(direction,raw) if raw in {'A','B'} else 'draw'
+                outcome='win' if winner=='A' else 'loss' if winner=='B' else 'draw'
+                if not any(row['outcome']==outcome for row in refs):refs.append({'direction':direction,'seed':int(rep['seed']),'outcome':outcome})
+    return refs
+
+def _build_battle_examples(ctx, sim, candidate, target, summary):
+    wanted=[]
+    if summary['wins']>0:wanted.append('win')
+    if summary['losses']>0:wanted.append('loss')
+    if summary['draws']>0:wanted.append('draw')
+    refs=_representative_refs(sim);examples=[]
+    for outcome in wanted:
+        ref=next((row for row in refs if row['outcome']==outcome),None)
+        if not ref:continue
+        left,right=(candidate,target) if ref['direction']=='forward' else (target,candidate)
+        result=simulate_once(ctx,copy.deepcopy(left),copy.deepcopy(right),seed=ref['seed'],verbose=True,trace_enabled=True)
+        examples.append(_compact_example(result,ref['direction'],ref['seed']))
+    return examples
+
 def evaluate_request(request_json):
     req=json.loads(request_json) if isinstance(request_json,str) else request_json
     candidate=_make(req['candidate']); target=_make(req.get('target_spec') or TARGETS[req['target']])
     trials=max(1,min(int(req.get('trials',10)),100));blocks=max(1,min(int(req.get('blocks',1)),3));seed=int(req.get('seed',1326230000));started=time.time()
-    sim=simulate_many_balanced(_ctx(),copy.deepcopy(candidate),copy.deepcopy(target),trials=trials,seed=seed,blocks=blocks)
-    return json.dumps({'type':'simulation','version':'adapter-v1','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','target':req.get('target','CUSTOM'),'trials_per_direction':trials,'blocks':blocks,'win_rate':sim.get('left_balanced_win_rate'),'hp_diff':sim.get('avg_hp_diff_balanced'),'elapsed_seconds':round(time.time()-started,3),'candidate_assignment':candidate.get('attach_assignment'),'formal_status':candidate.get('formal_status'),'sim':sim if req.get('include_detail') else None},ensure_ascii=False)
+    ctx=_ctx();sim=simulate_many_balanced(ctx,copy.deepcopy(candidate),copy.deepcopy(target),trials=trials,seed=seed,blocks=blocks)
+    summary=_battle_summary(sim,trials);examples=_build_battle_examples(ctx,sim,candidate,target,summary) if req.get('include_detail') else []
+    return json.dumps({'type':'simulation','version':'adapter-v2','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','target':req.get('target','CUSTOM'),'trials_per_direction':trials,'blocks':blocks,'requested_battles':summary['requestedBattles'],'win_rate':summary['winRate'],'balanced_win_rate':sim.get('left_balanced_win_rate'),'hp_diff':sim.get('avg_hp_diff_balanced'),'elapsed_seconds':round(time.time()-started,3),'candidate_assignment':candidate.get('attach_assignment'),'formal_status':candidate.get('formal_status'),'battle_summary':summary,'battle_examples':examples,'sim':sim if req.get('include_detail') else None},ensure_ascii=False)
 
 def _base_variants(seed, owned_pool, swap_depth):
     yield seed

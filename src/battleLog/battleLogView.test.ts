@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest';
 import type {Formation} from '../domain/schemas';
 import type {CanonicalOfficerStatsCatalog} from '../services/canonicalOfficerStatsCatalog';
-import {buildBattleSnapshot,enrichTraceRoles,extractRepresentativeTrace} from './battleLogView';
+import {buildBattleSnapshot,enrichTraceRoles,extractRepresentativeTrace,parseBattleExamples,parseBattleSummary} from './battleLogView';
 
 const now='2026-07-15T00:00:00.000Z';
 const warrior=(index:number,name:string,limitBreak:number,skills:[string,string])=>({id:`00000000-0000-4000-8000-0000000000${String(index).padStart(2,'0')}`,name,limitBreak,inherentSkill:`${name}固有`,equippedSkills:skills});
@@ -36,5 +36,13 @@ describe('battleLogView',()=>{
   const snapshot=buildBattleSnapshot(A,B,catalog),trace=enrichTraceRoles(extractRepresentativeTrace(payload,'reverse')!,snapshot);
   expect(trace.winner).toBe('B');
   expect(trace.turns[0]?.entries.map(row=>`${row.side}:${row.officer}`)).toEqual(['B:丁','A:甲','B:戊','A:乙','B:己','A:丙']);
+ });
+
+ it('parses the 100-battle summary and exactly eight detailed turns',()=>{
+  const board={A:{side:'A',totalTroops:30000,officers:[]},B:{side:'B',totalTroops:30000,officers:[]}};
+  const turns=Array.from({length:8},(_,index)=>({turn:index+1,played:index<3,status:index<3?'played':'not_played_battle_ended',actionOrder:index<3?[{rank:1,side:'A',officer:'甲',role:'大将',effectiveSpeed:180,baseSpeed:180,timedSpeedBonus:0,persistentSpeedBonus:0}]:[],events:index===0?[{sequence:1,side:'A',actor:'甲',type:'action',text:'通常攻撃 -> B:丁 500',troopChanges:[{turn:1,side:'B',officer:'丁',source:'通常攻撃',before:10000,after:9500,delta:-500,kind:'loss'}]}]:[],start:index<3?board:null,end:index<3?board:null}));
+  const detailed={battle_summary:{requestedBattles:100,completedBattles:100,wins:60,losses:40,draws:0,winRate:.6,perDirectionBattles:50,runtimeFailures:0},battle_examples:[{schemaVersion:1,direction:'forward',seed:1,outcome:'win',winner:'A',winReason:'commander_kill',endedTurn:3,maxTurns:8,hpDiff:100,turns}]};
+  expect(parseBattleSummary(detailed)).toEqual({requestedBattles:100,completedBattles:100,wins:60,losses:40,draws:0,winRate:.6,perDirectionBattles:50,runtimeFailures:0});
+  const examples=parseBattleExamples(detailed);expect(examples).toHaveLength(1);expect(examples[0]?.turns).toHaveLength(8);expect(examples[0]?.turns[0]?.events[0]?.troopChanges[0]).toMatchObject({officer:'丁',before:10000,after:9500,delta:-500});expect(examples[0]?.turns[7]?.played).toBe(false);
  });
 });

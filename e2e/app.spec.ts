@@ -39,7 +39,7 @@ test('opens on iPhone and presents visible image import, photo library and camer
  await expect(page.getByLabel('編成A')).toBeVisible();
  await expect(page.getByLabel('編成B')).toBeVisible();
  await expect(page.getByLabel('最適化対象')).toBeVisible();
- await expect(page.getByRole('button',{name:'10×1で対戦'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'100戦で対戦'})).toBeDisabled();
  await expect(page.getByRole('button',{name:'最適編成を探索'})).toBeDisabled();
  await expect(page.getByRole('button',{name:'探索',exact:true})).toHaveCount(0);
 
@@ -52,8 +52,8 @@ test('opens on iPhone and presents visible image import, photo library and camer
  await expect(page.getByRole('heading',{name:'戦法管理'})).toBeVisible();
 });
 
-test('matches formations and shows six-officer stats and runtime action order online and offline',async({page,context})=>{
- test.setTimeout(300_000);
+test('runs 100 battles and shows win/loss examples with T1-T8 actions and troop changes online and offline',async({page,context})=>{
+ test.setTimeout(600_000);
  const now='2026-07-13T00:00:00.000Z';
  const warrior=(id:string,name:string,limitBreak:number,equippedSkills:[string,string])=>({id,name,limitBreak,inherentSkill:'固有戦法',equippedSkills});
  const backup={schemaVersion:2,exportedAt:now,warriors:[],skills:[],battleResults:[],formations:[
@@ -77,9 +77,10 @@ test('matches formations and shows six-officer stats and runtime action order on
  await page.getByLabel('最適化対象').selectOption(backup.formations[1].id);
  await expect(page.getByRole('button',{name:'最適編成を探索'})).toBeEnabled();
 
- await page.getByRole('button',{name:'10×1で対戦'}).click();
- await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
- await expect(page.getByText('山本騎馬の勝率')).toBeVisible();
+ await page.getByRole('button',{name:'100戦で対戦'}).click();
+ await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:420_000});
+ await expect(page.getByText('山本騎馬の100戦勝率')).toBeVisible();
+ await expect(page.getByText(/完走 100\/100戦/)).toBeVisible();
  await expect(page.getByText('正本準拠エンジンで計算済み',{exact:true})).toBeVisible();
  await expect(page.locator('body')).not.toContainText(/b223/i);
  const battleLog=page.getByRole('button',{name:/山本騎馬 vs 黒田弓/});await expect(battleLog).toBeVisible();await battleLog.click();
@@ -87,17 +88,17 @@ test('matches formations and shows six-officer stats and runtime action order on
  const statuses=page.getByRole('region',{name:'6武将ステータス'});await expect(statuses).toBeVisible();
  await expect(statuses.getByLabel('A 山本勘助 ステータス')).toBeVisible();await expect(statuses.getByLabel('B 黒田官兵衛 ステータス')).toBeVisible();
  await expect(statuses.getByText('武勇',{exact:true}).first()).toBeVisible();await expect(statuses.getByText('知略',{exact:true}).first()).toBeVisible();await expect(statuses.getByText('統率',{exact:true}).first()).toBeVisible();await expect(statuses.getByText('速度',{exact:true}).first()).toBeVisible();
- const actionOrder=page.getByRole('region',{name:'6武将 行動順'});await expect(actionOrder).toBeVisible();await expect(actionOrder.getByText('T1 行動順（6名）')).toBeVisible();await expect(actionOrder.getByText(/山本勘助/).first()).toBeVisible();await expect(actionOrder.getByText(/黒田官兵衛/).first()).toBeVisible();
+ await expect(page.getByRole('region',{name:'対戦結果'}).getByText('100戦結果')).toBeVisible();
+ const actionOrder=page.getByRole('region',{name:'6武将 行動順'});await expect(actionOrder).toBeVisible();await expect(actionOrder.getByText('T1〜T8 行動・兵数ログ')).toBeVisible();
+ for(let turn=1;turn<=8;turn++)await expect(actionOrder.getByText(`T${turn}`,{exact:true})).toBeVisible();
+ await expect(actionOrder.getByRole('button',{name:'A勝利例'})).toBeVisible();await expect(actionOrder.getByRole('button',{name:'A敗北例'})).toBeVisible();
+ await expect(actionOrder.getByRole('list',{name:'T1 行動順'})).toContainText(/山本勘助|黒田官兵衛/);await expect(actionOrder.getByRole('list',{name:'T1 行動内容'})).toContainText('兵数');
  await page.getByRole('button',{name:'閉じる'}).click();
 
  await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
  await context.setOffline(true);await page.reload();
  await expect(page.getByText('オフラインで利用中',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'対戦・提案'}).click();
- await page.getByLabel('編成A').selectOption(backup.formations[0].id);await page.getByLabel('編成B').selectOption(backup.formations[1].id);
- await page.getByRole('button',{name:'10×1で対戦'}).click();
- await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
- await expect(page.getByText('正本準拠エンジンで計算済み',{exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText(/b223/i);
  await page.getByRole('button',{name:/山本騎馬 vs 黒田弓/}).first().click();
- await expect(page.getByRole('region',{name:'6武将ステータス'})).toBeVisible();await expect(page.getByRole('region',{name:'6武将 行動順'}).getByText('T1 行動順（6名）')).toBeVisible();
+ await expect(page.getByRole('region',{name:'6武将ステータス'})).toBeVisible();await expect(page.getByRole('region',{name:'対戦結果'}).getByText('100戦結果')).toBeVisible();await expect(page.getByRole('region',{name:'6武将 行動順'}).getByText('T1〜T8 行動・兵数ログ')).toBeVisible();
 });

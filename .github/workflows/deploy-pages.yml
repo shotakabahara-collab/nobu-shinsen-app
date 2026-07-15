@@ -57,6 +57,8 @@ jobs:
           grep -Fq 'browser_runtime_api' /tmp/runtime-worker.js
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}runtime_bundle_b223.tgz" -o /tmp/runtime_bundle_b223.tgz
           echo "${expected_bundle_sha}  /tmp/runtime_bundle_b223.tgz" | sha256sum --check --strict
+          tar -xOf /tmp/runtime_bundle_b223.tgz 02_ENGINE/browser_runtime_api.py | grep -Fq "'version':'adapter-v2'"
+          tar -xOf /tmp/runtime_bundle_b223.tgz 02_ENGINE/browser_runtime_api.py | grep -Fq '_build_battle_examples'
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}canonical_officer_catalog.json" -o /tmp/canonical_officer_catalog.json
           node -e "const c=require('/tmp/canonical_officer_catalog.json');const m=new Map(c.officers.map(x=>[x.name,x]));const matsu=m.get('松永久秀');const kaki=m.get('柿崎景家');if(c.canonicalArchiveSha256!==process.argv[1]||c.officerCount!==c.officers.length||matsu?.inherentSkill!=='梟雄の計'||c.unitLevelRule?.baseLevel!==5||c.unitLevelRule?.defaultCap!==10||c.unitLevelRule?.capUnlockMode!=='unbounded'||!matsu?.unitLevelTraits?.some(t=>t.name==='砲術Ⅲ'&&t.unlockedAt===3&&t.levelBonus===3&&t.capUnlock===false)||!kaki?.unitLevelTraits?.some(t=>t.name==='騎兵大将'&&t.capUnlock===true))process.exit(1)" "${expected_archive_sha}"
           curl --fail --silent --show-error --retry 8 --retry-all-errors "${base}canonical_officer_stats_catalog.json" -o /tmp/canonical_officer_stats_catalog.json
@@ -104,12 +106,13 @@ jobs:
               '- PWA manifest / standalone設定',
               '- runtime-worker.js / canonical adapter参照',
               '- runtime_bundle_b223.tgz / release lock SHA一致',
+              '- adapter-v2 / 100戦集計・勝敗別代表例・T1〜T8行動兵数trace',
               '- canonical_officer_catalog.json / 固有・凸別兵種Lv特性・無天井の上限解放ルール一致',
               '- canonical_officer_stats_catalog.json / 凸別ステ振り後4能力・行動順用速度一致',
               '- canonical_skill_catalog.json / 固有装着不可・装着可能戦法・戦法由来兵種Lv効果lane一致',
               '',
               passed
-                ? '機械検証範囲はリリースPASSです。物理iPhoneではBattle Log詳細の6武将ステータス、T1〜T8行動順、正逆方向のA/B対応を確認してください。'
+                ? '機械検証範囲はリリースPASSです。物理iPhoneでは100戦完走、勝利例・敗北例、T1〜T8の行動内容と兵数増減を確認してください。'
                 : '公開工程またはsmokeに失敗しています。GitHub ActionsのDeploy GitHub Pagesログを確認してください。',
             ].join('\n');
             const params = {

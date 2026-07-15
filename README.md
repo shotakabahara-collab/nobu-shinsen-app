@@ -7,7 +7,8 @@
 - 3武将・凸・固有戦法・装着戦法・兵種・兵種Lvを含む自軍／敵軍編成の作成・編集・削除
 - 武将・所有戦法の管理、IndexedDB永続化、全データのJSON Import / Export
 - b223の `calculate` / `search` / `formal` 境界、実勝率・計算状態・エラー表示
-- Battle Log保存・詳細表示、所有データを使う予算制限付き探索、30×3正式再評価
+- 順方向50戦＋逆方向50戦の100戦勝率、勝敗別代表例、T1〜T8の行動内容・兵数増減を保存するBattle Log
+- 所有データを使う予算制限付き探索、30×3正式再評価
 - iPhoneセーフエリア・ホーム画面用アイコン・standalone表示・オフラインキャッシュ
 - 固定SHAのcanonical archive・battle runtime・runtime bundleを用いた改変検知
 - Vitest、Python runtime E2E、Chromium iPhone viewport E2E、WebKit iPhone互換E2E
