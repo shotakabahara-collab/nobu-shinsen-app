@@ -2,13 +2,14 @@ import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 
-const required=['pyodide/pyodide.js','pyodide/pyodide.asm.js','pyodide/pyodide.asm.wasm','pyodide/pyodide-lock.json','pyodide/python_stdlib.zip','runtime-worker.js','runtime_bundle_b223.tgz','canonical_officer_catalog.json','canonical_skill_catalog.json','manifest.webmanifest','apple-touch-icon.png','icon-192.png','icon-512.png'];
+const required=['pyodide/pyodide.js','pyodide/pyodide.asm.js','pyodide/pyodide.asm.wasm','pyodide/pyodide-lock.json','pyodide/python_stdlib.zip','runtime-worker.js','runtime_bundle_b223.tgz','canonical_officer_catalog.json','canonical_officer_stats_catalog.json','canonical_skill_catalog.json','manifest.webmanifest','apple-touch-icon.png','icon-192.png','icon-512.png'];
 const sw=await readFile(join('dist','sw.js'),'utf8');
 const worker=await readFile(join('dist','runtime-worker.js'),'utf8');
 const manifest=JSON.parse(await readFile(join('dist','manifest.webmanifest'),'utf8'));
 const lock=JSON.parse(await readFile(join('canonical','LOCK.json'),'utf8'));
 const bundle=await readFile(join('dist','runtime_bundle_b223.tgz'));
 const officerCatalog=JSON.parse(await readFile(join('dist','canonical_officer_catalog.json'),'utf8'));
+const officerStats=JSON.parse(await readFile(join('dist','canonical_officer_stats_catalog.json'),'utf8'));
 const skillCatalog=JSON.parse(await readFile(join('dist','canonical_skill_catalog.json'),'utf8'));
 const bundleSha=createHash('sha256').update(bundle).digest('hex');
 
@@ -21,6 +22,11 @@ if(officerCatalog.unitLevelRule?.baseLevel!==5||officerCatalog.unitLevelRule?.de
 const officerByName=new Map(officerCatalog.officers.map(officer=>[officer.name,officer]));
 if(!officerByName.get('松永久秀')?.unitLevelTraits?.some(trait=>trait.name==='砲術Ⅲ'&&trait.unlockedAt===3&&trait.levelBonus===3&&trait.capUnlock===false))throw new Error('canonical troop level trait missing: 松永久秀 砲術Ⅲ');
 if(!officerByName.get('柿崎景家')?.unitLevelTraits?.some(trait=>trait.name==='騎兵大将'&&trait.levelBonus===3&&trait.capUnlock===true))throw new Error('canonical unbounded cap-unlock trait missing: 柿崎景家 騎兵大将');
+if(officerStats.canonicalVersion!==lock.canonicalVersion||officerStats.canonicalArchiveSha256!==lock.archiveSha256)throw new Error('canonical officer stat catalog release lock mismatch');
+if(!Array.isArray(officerStats.records)||officerStats.recordCount!==officerStats.records.length)throw new Error('canonical officer stat catalog is malformed');
+const statKeys=officerStats.records.map(row=>`${row.name}|${row.awaken}`);if(new Set(statKeys).size!==statKeys.length)throw new Error('canonical officer stat keys are duplicated');
+const statsByKey=new Map(officerStats.records.map(row=>[`${row.name}|${row.awaken}`,row]));
+const yamamoto=statsByKey.get('山本勘助|2');if(yamamoto?.allocated?.intel!==244||yamamoto?.actionOrderSpeed!==117)throw new Error('canonical allocated stats missing: 山本勘助2凸');
 if(skillCatalog.canonicalVersion!==lock.canonicalVersion||skillCatalog.canonicalArchiveSha256!==lock.archiveSha256)throw new Error('canonical skill catalog release lock mismatch');
 if(!Array.isArray(skillCatalog.skills)||skillCatalog.skillCount!==skillCatalog.skills.length)throw new Error('canonical skill catalog is malformed');
 const skillByName=new Map(skillCatalog.skills.map(skill=>[skill.name,skill]));
@@ -28,4 +34,4 @@ if(skillByName.get('梟雄の計')?.attachable!==false||skillByName.get('紅蓮�
 if(!skillCatalog.skills.every(skill=>Array.isArray(skill.unitLevelEffects)))throw new Error('canonical skill unit-level effects are malformed');
 if(manifest.display!=='standalone'||manifest.orientation!=='portrait'||manifest.start_url!=='/nobu-shinsen-app/')throw new Error('PWA manifest is not configured for iPhone standalone launch');
 for(const size of ['192x192','512x512'])if(!manifest.icons?.some(icon=>icon.sizes===size&&icon.type==='image/png'))throw new Error(`PWA manifest missing PNG icon: ${size}`);
-console.log(`offline precache verified: ${required.length} required assets; ${officerCatalog.officerCount} canonical officers with unbounded cap-unlock traits; ${skillCatalog.skillCount} canonical skills with unit-level effect lanes; runtime bundle ${bundleSha}`);
+console.log(`offline precache verified: ${required.length} required assets; ${officerCatalog.officerCount} canonical officers; ${officerStats.recordCount} officer/awaken stat rows; ${skillCatalog.skillCount} canonical skills; runtime bundle ${bundleSha}`);
