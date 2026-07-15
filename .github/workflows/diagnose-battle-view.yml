@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build runtime bundle
         run: python3 scripts/build_runtime_bundle.py >/dev/null
-      - name: Export resolved team shape
+      - name: Export resolved teams and detailed simulation
         run: |
           python3 - <<'PY'
           import json,sys,tarfile,tempfile
@@ -21,16 +21,23 @@ jobs:
             with tarfile.open(root/'public/runtime_bundle_b223.tgz','r:gz') as bundle:bundle.extractall(td)
             engine=Path(td)/'02_ENGINE';sys.path.insert(0,str(engine))
             import browser_runtime_api as api
-            team=api._make(api.TARGETS['YAMAMOTO'])
+            left=api._make(api.TARGETS['YAMAMOTO'])
+            right=api._make(api.TARGETS['KURODA'])
+            request={'candidate':api.TARGETS['YAMAMOTO'],'target':'KURODA','target_spec':api.TARGETS['KURODA'],'trials':1,'blocks':1,'seed':1326230000,'include_detail':True}
+            result=json.loads(api.evaluate_request(request))
             def prune(value,depth=0):
-              if depth>4:return type(value).__name__
+              if depth>7:return type(value).__name__
               if isinstance(value,dict):return {str(k):prune(v,depth+1) for k,v in value.items()}
-              if isinstance(value,list):return [prune(v,depth+1) for v in value[:8]]
+              if isinstance(value,list):return [prune(v,depth+1) for v in value[:20]]
               if isinstance(value,(str,int,float,bool)) or value is None:return value
               return str(value)
-            (root/'battle-view-diagnostic.json').write_text(json.dumps(prune(team),ensure_ascii=False,indent=2),encoding='utf-8')
+            payload={'left':prune(left),'right':prune(right),'result':prune(result)}
+            (root/'battle-view-diagnostic.json').write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8')
+            (root/'battle-simulator.py').write_bytes((engine/'battle_simulator.py').read_bytes())
           PY
       - uses: actions/upload-artifact@v4
         with:
           name: battle-view-diagnostic
-          path: battle-view-diagnostic.json
+          path: |
+            battle-view-diagnostic.json
+            battle-simulator.py
