@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
-import {AlertTriangle,Camera,CheckCircle2,ClipboardPaste,ImagePlus,Loader2,RotateCcw,X} from 'lucide-react';
+import {AlertTriangle,Camera,CheckCircle2,ClipboardPaste,ImagePlus,Loader2,RotateCcw} from 'lucide-react';
 import type {UnitType} from '../domain/formationRules';
 import type {WarriorRecord} from '../domain/schemas';
 import {recognizeFormationImages} from '../imageImport/browserOcr';
@@ -70,15 +70,15 @@ export function ImageFormationImporter({officers,skills,ownedWarriors,onApply,re
  function reset(){setFiles([]);setDraft(null);setError('');setStatus('');setProgress(0);if(input.current)input.current.value='';}
 
  return <section className="rounded-2xl border border-cyan-800 bg-slate-900 p-4" aria-label="画像から編成を読み込む">
-  <div className="flex items-start justify-between gap-3"><div><h3 className="flex items-center font-bold text-cyan-300"><ImagePlus className="mr-2 size-5"/>画像から編成を読み込む</h3><p className="mt-1 text-xs leading-5 text-slate-400">スクリーンショットを最大4枚選択し、武将・兵種・装着戦法・凸を正本DBと照合します。</p></div><Button type="button" variant="secondary" onClick={()=>setOpen(value=>!value)}>{open?'閉じる':'開く'}</Button></div>
+  <div className="flex items-start justify-between gap-3"><div><h3 className="flex items-center font-bold text-cyan-300"><ImagePlus className="mr-2 size-5"/>画像から編成を読み込む</h3><p className="mt-1 text-xs leading-5 text-slate-400">スクリーンショットを最大4枚選択し、武将・兵種・装着戦法・凸を正本DBと照合します。3武将が横並びの画面はカードごとに自動分割します。</p></div><Button type="button" variant="secondary" onClick={()=>setOpen(value=>!value)}>{open?'閉じる':'開く'}</Button></div>
   {open&&<div className="mt-4 space-y-4">
    <div ref={pasteZone} tabIndex={0} onPaste={handlePaste} className="rounded-xl border border-dashed border-slate-600 bg-slate-950 p-4 text-center outline-none focus:border-cyan-400">
     <div className="flex justify-center gap-3"><Camera className="size-5 text-cyan-300"/><ClipboardPaste className="size-5 text-cyan-300"/></div>
-    <p className="mt-2 text-sm">写真を選ぶ・撮影する・画像を貼り付ける</p><p className="mt-1 text-xs text-slate-500">画像は端末内で解析され、サーバーへ保存されません。初回のみ画像認識エンジンの読込に通信が必要です。</p>
+    <p className="mt-2 text-sm">写真を選ぶ・撮影する・画像を貼り付ける</p><p className="mt-1 text-xs text-slate-500">画像は端末内で解析され、サーバーへ保存されません。赤い菱形の個数から凸を判定します。青い数字、武将Lv、兵種欄のLVは凸に含めません。初回のみ画像認識エンジンの読込に通信が必要です。</p>
     <Button type="button" className="mt-3" onClick={()=>input.current?.click()} disabled={running}>画像を選択</Button>
     <input ref={input} className="hidden" type="file" accept="image/*" capture="environment" multiple onChange={event=>acceptFiles(Array.from(event.target.files??[]))}/>
    </div>
-   {previews.length>0&&<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{previews.map((url,index)=><div key={url} className="relative overflow-hidden rounded-lg border border-slate-700"><img src={url} alt={`読込画像${index+1}`} className="aspect-[9/16] w-full object-cover"/><span className="absolute left-1 top-1 rounded bg-black/70 px-2 py-1 text-[10px]">{index+1}</span></div>)}</div>}
+   {previews.length>0&&<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{previews.map((url,index)=><div key={url} className="relative overflow-hidden rounded-lg border border-slate-700 bg-black"><img src={url} alt={`読込画像${index+1}`} className="aspect-video w-full object-contain"/><span className="absolute left-1 top-1 rounded bg-black/70 px-2 py-1 text-[10px]">{index+1}</span></div>)}</div>}
    {files.length>0&&<div className="grid grid-cols-2 gap-3"><Button type="button" variant="secondary" onClick={reset} disabled={running}><RotateCcw className="mr-2 size-4"/>選び直す</Button><Button type="button" onClick={()=>void analyze()} disabled={running||!officers.length||!skills.length}>{running?<Loader2 className="mr-2 size-4 animate-spin"/>:<ImagePlus className="mr-2 size-4"/>}自動解析</Button></div>}
    {(running||status)&&<div className="rounded-xl bg-slate-950 p-3"><div className="flex items-center justify-between text-xs text-slate-400"><span>{status}</span><span>{Math.round(progress*100)}%</span></div><div className="mt-2 h-2 overflow-hidden rounded bg-slate-800"><div className="h-full bg-cyan-400 transition-all" style={{width:`${Math.round(progress*100)}%`}}/></div></div>}
    {error&&<p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-300">{error}</p>}
