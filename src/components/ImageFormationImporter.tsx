@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
-import {AlertTriangle,Camera,CheckCircle2,ClipboardPaste,ImagePlus,Loader2,RotateCcw} from 'lucide-react';
+import {AlertTriangle,Camera,CheckCircle2,ClipboardPaste,ImagePlus,Images,Loader2,RotateCcw} from 'lucide-react';
 import type {UnitType} from '../domain/formationRules';
 import type {WarriorRecord} from '../domain/schemas';
 import {recognizeFormationImages} from '../imageImport/browserOcr';
@@ -41,7 +41,9 @@ function toApplyValue(draft:FormationImageDraft):ImageFormationImportValue{
 }
 
 export function ImageFormationImporter({officers,skills,ownedWarriors,onApply,recognize=recognizeFormationImages,initialOpen=false}:Props){
- const input=useRef<HTMLInputElement>(null);const pasteZone=useRef<HTMLDivElement>(null);
+ const libraryInput=useRef<HTMLInputElement>(null);
+ const cameraInput=useRef<HTMLInputElement>(null);
+ const pasteZone=useRef<HTMLDivElement>(null);
  const [open,setOpen]=useState(initialOpen);const [files,setFiles]=useState<File[]>([]);const [previews,setPreviews]=useState<string[]>([]);
  const [running,setRunning]=useState(false);const [progress,setProgress]=useState(0);const [status,setStatus]=useState('');const [error,setError]=useState('');const [draft,setDraft]=useState<FormationImageDraft|null>(null);
 
@@ -68,16 +70,26 @@ export function ImageFormationImporter({officers,skills,ownedWarriors,onApply,re
   finally{setRunning(false);}
  }
 
- function reset(){setFiles([]);setDraft(null);setError('');setStatus('');setProgress(0);if(input.current)input.current.value='';}
+ function reset(){
+  setFiles([]);setDraft(null);setError('');setStatus('');setProgress(0);
+  if(libraryInput.current)libraryInput.current.value='';
+  if(cameraInput.current)cameraInput.current.value='';
+ }
 
  return <section className="rounded-2xl border border-cyan-800 bg-slate-900 p-4" aria-label="画像から編成を読み込む">
   <div className="flex items-start justify-between gap-3"><div><h3 className="flex items-center font-bold text-cyan-300"><ImagePlus className="mr-2 size-5"/>画像から編成を読み込む</h3><p className="mt-1 text-xs leading-5 text-slate-400">スクリーンショットを最大4枚選択し、武将・兵種・装着戦法・凸を正本DBと照合します。3武将が横並びの画面はカードごとに自動分割します。</p></div><Button type="button" variant="secondary" onClick={()=>setOpen(value=>!value)}>{open?'閉じる':'開く'}</Button></div>
   {open&&<div className="mt-4 space-y-4">
    <div ref={pasteZone} tabIndex={0} onPaste={handlePaste} className="rounded-xl border border-dashed border-slate-600 bg-slate-950 p-4 text-center outline-none focus:border-cyan-400">
-    <div className="flex justify-center gap-3"><Camera className="size-5 text-cyan-300"/><ClipboardPaste className="size-5 text-cyan-300"/></div>
-    <p className="mt-2 text-sm">写真を選ぶ・撮影する・画像を貼り付ける</p><p className="mt-1 text-xs text-slate-500">画像は端末内で解析され、サーバーへ保存されません。赤い菱形の個数から凸を判定します。青い数字、武将Lv、兵種欄のLVは凸に含めません。初回のみ画像認識エンジンの読込に通信が必要です。</p>
-    <Button type="button" className="mt-3" onClick={()=>input.current?.click()} disabled={running}>画像を選択</Button>
-    <input ref={input} className="hidden" type="file" accept="image/*" capture="environment" multiple onChange={event=>acceptFiles(Array.from(event.target.files??[]))}/>
+    <div className="flex justify-center gap-3"><Images className="size-5 text-cyan-300"/><Camera className="size-5 text-cyan-300"/><ClipboardPaste className="size-5 text-cyan-300"/></div>
+    <p className="mt-2 text-sm">写真ライブラリ・カメラ・画像の貼り付けに対応</p>
+    <p className="mt-1 text-xs text-slate-500">画像は端末内で解析され、サーバーへ保存されません。赤い菱形の個数から凸を判定します。青い数字、武将Lv、兵種欄のLVは凸に含めません。初回のみ画像認識エンジンの読込に通信が必要です。</p>
+    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+     <Button type="button" variant="secondary" onClick={()=>libraryInput.current?.click()} disabled={running}><Images className="mr-2 size-4"/>写真ライブラリから選ぶ</Button>
+     <Button type="button" onClick={()=>cameraInput.current?.click()} disabled={running}><Camera className="mr-2 size-4"/>カメラで撮影</Button>
+    </div>
+    <p className="mt-3 text-xs text-slate-500">クリップボードの画像は、この枠を選択して貼り付けても読み込めます。</p>
+    <input ref={libraryInput} aria-label="写真ライブラリから画像を選択" className="hidden" type="file" accept="image/*" multiple onChange={event=>acceptFiles(Array.from(event.target.files??[]))}/>
+    <input ref={cameraInput} aria-label="カメラで画像を撮影" className="hidden" type="file" accept="image/*" capture="environment" onChange={event=>acceptFiles(Array.from(event.target.files??[]))}/>
    </div>
    {previews.length>0&&<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{previews.map((url,index)=><div key={url} className="relative overflow-hidden rounded-lg border border-slate-700 bg-black"><img src={url} alt={`読込画像${index+1}`} className="aspect-video w-full object-contain"/><span className="absolute left-1 top-1 rounded bg-black/70 px-2 py-1 text-[10px]">{index+1}</span></div>)}</div>}
    {files.length>0&&<div className="grid grid-cols-2 gap-3"><Button type="button" variant="secondary" onClick={reset} disabled={running}><RotateCcw className="mr-2 size-4"/>選び直す</Button><Button type="button" onClick={()=>void analyze()} disabled={running||!officers.length||!skills.length}>{running?<Loader2 className="mr-2 size-4 animate-spin"/>:<ImagePlus className="mr-2 size-4"/>}自動解析</Button></div>}

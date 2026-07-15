@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 
-test('opens on iPhone and presents visible image import, matchup and optimizer controls',async({page,request})=>{
+test('opens on iPhone and presents visible image import, photo library and camera controls',async({page,request})=>{
  await page.goto('./');
  await expect(page.getByRole('heading',{name:'NOBU Companion'})).toBeVisible();
  await expect(page.getByText('正本準拠シミュレーション',{exact:true})).toBeVisible();
@@ -15,10 +15,15 @@ test('opens on iPhone and presents visible image import, matchup and optimizer c
  await expect(imageEntry).toBeVisible();
  await imageEntry.click();
  await expect(page.getByRole('region',{name:'画像から編成を読み込む'})).toBeVisible();
- await expect(page.getByText('写真を選ぶ・撮影する・画像を貼り付ける')).toBeVisible();
- const imageInput=page.locator('input[type="file"][accept="image/*"]');
- await expect(imageInput).toHaveAttribute('multiple','');
- await expect(imageInput).toHaveAttribute('capture','environment');
+ await expect(page.getByText('写真ライブラリ・カメラ・画像の貼り付けに対応')).toBeVisible();
+ await expect(page.getByRole('button',{name:'写真ライブラリから選ぶ'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'カメラで撮影'})).toBeVisible();
+ const libraryInput=page.getByLabel('写真ライブラリから画像を選択');
+ const cameraInput=page.getByLabel('カメラで画像を撮影');
+ await expect(libraryInput).toHaveAttribute('multiple','');
+ await expect(libraryInput).not.toHaveAttribute('capture');
+ await expect(cameraInput).toHaveAttribute('capture','environment');
+ await expect(cameraInput).not.toHaveAttribute('multiple');
  const warrior=page.getByRole('combobox',{name:'大将 武将名'});
  await warrior.fill('永久');
  await page.getByRole('option',{name:/松永久秀/}).click();
