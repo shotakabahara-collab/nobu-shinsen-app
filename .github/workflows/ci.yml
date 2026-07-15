@@ -26,7 +26,9 @@ jobs:
       - name: Run unit tests with diagnostic log
         shell: bash
         run: set -o pipefail; npm test 2>&1 | tee vitest.log
-      - run: npm run build
+      - name: Run production build with diagnostic log
+        shell: bash
+        run: set -o pipefail; npm run build 2>&1 | tee build.log
       - run: npm run test:offline
       - run: npm run test:e2e
       - if: failure()
@@ -35,6 +37,7 @@ jobs:
           name: test-failure-report
           path: |
             vitest.log
+            build.log
             playwright-report/
             test-results/
           if-no-files-found: ignore
