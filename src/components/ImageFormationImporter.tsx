@@ -8,6 +8,8 @@ import type {CanonicalOfficer} from '../services/canonicalOfficerCatalog';
 import type {CanonicalSkill} from '../services/canonicalSkillCatalog';
 import {Button} from './ui/button';
 
+export const IMAGE_IMPORT_OPEN_REQUEST='nobu:image-import-open';
+
 export type ImageFormationImportValue={
  troopType?:UnitType;
  warriors:{name?:string;limitBreak?:number;equippedSkills:[string,string]}[];
@@ -39,12 +41,21 @@ function toApplyValue(draft:FormationImageDraft):ImageFormationImportValue{
  };
 }
 
+function consumeOpenRequest():boolean{
+ try{
+  if(sessionStorage.getItem(IMAGE_IMPORT_OPEN_REQUEST)!=='1')return false;
+  sessionStorage.removeItem(IMAGE_IMPORT_OPEN_REQUEST);
+  return true;
+ }catch{return false;}
+}
+
 export function ImageFormationImporter({officers,skills,ownedWarriors,onApply,recognize=recognizeFormationImages}:Props){
  const input=useRef<HTMLInputElement>(null);const pasteZone=useRef<HTMLDivElement>(null);
- const [open,setOpen]=useState(false);const [files,setFiles]=useState<File[]>([]);const [previews,setPreviews]=useState<string[]>([]);
+ const [open,setOpen]=useState(consumeOpenRequest);const [files,setFiles]=useState<File[]>([]);const [previews,setPreviews]=useState<string[]>([]);
  const [running,setRunning]=useState(false);const [progress,setProgress]=useState(0);const [status,setStatus]=useState('');const [error,setError]=useState('');const [draft,setDraft]=useState<FormationImageDraft|null>(null);
 
  useEffect(()=>{const urls=files.map(file=>URL.createObjectURL(file));setPreviews(urls);return()=>urls.forEach(URL.revokeObjectURL);},[files]);
+ useEffect(()=>{if(open)requestAnimationFrame(()=>pasteZone.current?.scrollIntoView({block:'center'}));},[open]);
 
  function acceptFiles(next:File[]){
   const images=next.filter(file=>file.type.startsWith('image/')).slice(0,4);
