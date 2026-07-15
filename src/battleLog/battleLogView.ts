@@ -29,7 +29,7 @@ const record=(value:unknown):Record<string,unknown>|undefined=>value&&typeof val
 const array=(value:unknown):unknown[]=>Array.isArray(value)?value:[];
 const numberOrNull=(value:unknown):number|null=>typeof value==='number'&&Number.isFinite(value)?value:null;
 const numberOr=(value:unknown,fallback=0):number=>numberOrNull(value)??fallback;
-const stringOr=(value:unknown,fallback=''):string=>typeof value==='string'?value:fallback;
+const stringOr=(value:unknown,fallback:string|number=''):string=>typeof value==='string'?value:typeof fallback==='string'?fallback:'';
 const troopKey=(side:BattleSide,name:string)=>`${side}|${name}`;
 
 function sideSnapshot(side:BattleSide,formation:Formation,catalog:CanonicalOfficerStatsCatalog):BattleSideSnapshot{
@@ -102,9 +102,8 @@ function diverseFirst(rows:BattleExampleRequest[],count:number):BattleExampleReq
 }
 
 export function selectBattleExampleRequests(payload:Record<string,unknown>):BattleExampleRequest[]{
- const summary=buildBattleEvaluationSummary(payload),rows=representativeRows(payload),winRows=rows.filter(row=>row.outcome==='win'),lossRows=rows.filter(row=>row.outcome==='loss');
- if(summary.completedBattles>0&&summary.wins===summary.completedBattles)return diverseFirst(winRows,1);
- return [...diverseFirst(winRows,2),...diverseFirst(lossRows,2)];
+ const rows=representativeRows(payload),winRows=rows.filter(row=>row.outcome==='win'),lossRows=rows.filter(row=>row.outcome==='loss');
+ return [...diverseFirst(winRows,1),...diverseFirst(lossRows,1)];
 }
 
 export function attachBattleEvaluation<T extends Record<string,unknown>>(payload:T,summary:BattleEvaluationSummary,examples:StoredBattleExample[]):T&{battle_evaluation:{schemaVersion:1;summary:BattleEvaluationSummary;examples:StoredBattleExample[]}}{
