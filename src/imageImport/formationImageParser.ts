@@ -16,7 +16,15 @@ export type FormationImageDraft={
  warnings:string[];
  rawText:string;
 };
-export type OcrPage={text:string;confidence?:number};
+export type OcrPage={
+ text:string;
+ confidence?:number;
+ slot?:0|1|2;
+ layout?:'three-card';
+ limitBreak?:number;
+ limitBreakConfidence?:'high'|'medium';
+ limitBreakEvidence?:string;
+};
 
 type TextMatch={name:string;index:number;score:number;evidence:string};
 
@@ -128,11 +136,45 @@ function nearestUnused<T extends {index:number}>(items:T[],index:number,used:Set
 
 function emptyField<T>(evidence:string):ImportedField<T>{return {value:null,confidence:'missing',evidence};}
 
-export function parseFormationImages(
- pages:readonly OcrPage[],
- officers:readonly CanonicalOfficer[],
- skills:readonly CanonicalSkill[],
- ownedWarriors:readonly WarriorRecord[]=[]
+function segmentedTroopType(pages:readonly OcrPage[],rawText:string):{field:ImportedField<UnitType>;conflict:boolean}{
+ const detected=pages.map(page=>detectTroopType(page.text)).filter((field):field is ImportedField<UnitType>&{value:UnitType}=>field.value!==null);
+ if(!detected.length)return {field:detectTroopType(rawText),conflict:false};
+ const counts=new Map<UnitType,number>();detected.forEach(field=>counts.set(field.value,(counts.get(field.value)??0)+1));
+ const ranked=Array.from(counts.entries()).sort((a,b)=>b[1]-a[1]);const [value,count]=ranked[0]!;const conflict=ranked.length>1;
+ return {field:{value,confidence:count>=2&&!conflict?'high':'medium',evidence:`${count}枚の武将カードで「${value}」を確認`},conflict};
+}
+
+function parseSegmentedCards(
+ pages:readonly OcrPage[],officers:readonly CanonicalOfficer[],skills:readonly CanonicalSkill[],ownedWarriors:readonly WarriorRecord[]
+):FormationImageDraft{
+ const rawText=pages.map(page=>`${page.slot===0?'大将':page.slot===1?'副将1':page.slot===2?'副将2':'画像'}\n${page.text}`).join('\n');
+ const inherent=new Set(officers.map(officer=>compact(officer.inherentSkill)));
+ const attachable=skills.filter(skill=>skill.attachable&&!inherent.has(compact(skill.name))).map(skill=>skill.name);
+ const ownedByName=new Map(ownedWarriors.map(warrior=>[compact(warrior.name),warrior]));
+ const warriors=([0,1,2] as const).map(slot=>{
+  const slotPages=pages.filter(page=>page.slot===slot);const text=slotPages.map(page=>page.text).join('\n');const officer=catalogMatches(text,officers.map(value=>value.name),1)[0];
+  const name=officer?{value:officer.name,confidence:confidence(officer.score),evidence:officer.evidence}:emptyField<string>('武将名を確認できませんでした');
+  const skillsFound=catalogMatches(text,attachable,4).filter((match,index,array)=>array.findIndex(value=>value.name===match.name)===index).slice(0,2);
+  let limitBreak:ImportedField<number>;
+  const pixel=slotPages.find(page=>page.limitBreak!==undefined);
+  if(pixel?.limitBreak!==undefined)limitBreak={value:pixel.limitBreak,confidence:pixel.limitBreakConfidence??'medium',evidence:pixel.limitBreakEvidence??`赤い凸マーク${pixel.limitBreak}個`};
+  else{
+   const textBreak=detectLimitBreaks(text)[0];
+   if(textBreak)limitBreak={value:textBreak.value,confidence:'medium',evidence:textBreak.evidence};
+   else if(officer){const owned=ownedByName.get(compact(officer.name));limitBreak=owned?{value:owned.limitBreak,confidence:'medium',evidence:'登録済み所有情報から補完'}:emptyField<number>('赤い凸マークを確認できませんでした');}
+   else limitBreak=emptyField<number>('武将未確定のため凸も未確認です');
+  }
+  return {name,limitBreak,equippedSkills:[skillsFound[0]?{value:skillsFound[0].name,confidence:confidence(skillsFound[0].score),evidence:skillsFound[0].evidence}:emptyField<string>('装着戦法1を確認できませんでした'),skillsFound[1]?{value:skillsFound[1].name,confidence:confidence(skillsFound[1].score),evidence:skillsFound[1].evidence}:emptyField<string>('装着戦法2を確認できませんでした')]} as ImportedWarrior;
+ }) as FormationImageDraft['warriors'];
+ const warnings:string[]=[];const officerCount=warriors.filter(warrior=>warrior.name.value).length;if(officerCount<3)warnings.push(`武将は${officerCount}/3名のみ確定しました。`);
+ const skillCount=warriors.flatMap(warrior=>warrior.equippedSkills).filter(field=>field.value).length;if(skillCount<6)warnings.push(`装着戦法は${skillCount}/6枠のみ確定しました。`);
+ if(warriors.some(warrior=>warrior.limitBreak.value===null))warnings.push('赤い凸マークを読み取れない武将があります。手動で確認してください。');
+ const troop=segmentedTroopType(pages,rawText);if(!troop.field.value)warnings.push('兵種を読み取れませんでした。');if(troop.conflict)warnings.push('武将カード間で兵種の読取結果が一致しません。');
+ return {troopType:troop.field,warriors,warnings,rawText};
+}
+
+function parseGenericPages(
+ pages:readonly OcrPage[],officers:readonly CanonicalOfficer[],skills:readonly CanonicalSkill[],ownedWarriors:readonly WarriorRecord[]
 ):FormationImageDraft{
  const rawText=pages.map(page=>page.text).join('\n');
  const officerMatches=catalogMatches(rawText,officers.map(officer=>officer.name),3);
@@ -142,46 +184,26 @@ export function parseFormationImages(
  const awakenMatches=detectLimitBreaks(rawText);const usedAwaken=new Set<number>();
  const ownedByName=new Map(ownedWarriors.map(warrior=>[compact(warrior.name),warrior]));
  const assignedSkills:[ImportedField<string>[],ImportedField<string>[],ImportedField<string>[]]=[[],[],[]];
-
  for(const skill of skillMatches){
   const preceding=officerMatches.map((officer,index)=>({officer,index})).filter(row=>row.officer.index<=skill.index&&assignedSkills[row.index]!.length<2).sort((a,b)=>b.officer.index-a.officer.index)[0];
   let warriorIndex=preceding?.index;
-  if(warriorIndex===undefined){
-   let bestDistance=Number.POSITIVE_INFINITY;
-   officerMatches.forEach((officer,index)=>{
-    if(assignedSkills[index]!.length>=2)return;
-    const distance=Math.abs(skill.index-officer.index);
-    if(distance<bestDistance){bestDistance=distance;warriorIndex=index;}
-   });
-  }
-  if(warriorIndex===undefined||assignedSkills[warriorIndex]!.length>=2){
-   const open=assignedSkills.findIndex(values=>values.length<2);if(open>=0)warriorIndex=open;
-  }
+  if(warriorIndex===undefined){let bestDistance=Number.POSITIVE_INFINITY;officerMatches.forEach((officer,index)=>{if(assignedSkills[index]!.length>=2)return;const distance=Math.abs(skill.index-officer.index);if(distance<bestDistance){bestDistance=distance;warriorIndex=index;}});}
+  if(warriorIndex===undefined||assignedSkills[warriorIndex]!.length>=2){const open=assignedSkills.findIndex(values=>values.length<2);if(open>=0)warriorIndex=open;}
   if(warriorIndex!==undefined&&warriorIndex<3&&assignedSkills[warriorIndex]!.length<2)assignedSkills[warriorIndex]!.push({value:skill.name,confidence:confidence(skill.score),evidence:skill.evidence});
  }
-
  const warriors=Array.from({length:3},(_,index):ImportedWarrior=>{
-  const officer=officerMatches[index];
-  const name=officer?{value:officer.name,confidence:confidence(officer.score),evidence:officer.evidence}:emptyField<string>('武将名を確認できませんでした');
-  let limitBreak:ImportedField<number>;
-  if(officer){
-   const nearest=nearestUnused(awakenMatches,officer.index,usedAwaken);
-   if(nearest!==undefined){usedAwaken.add(nearest);const found=awakenMatches[nearest]!;limitBreak={value:found.value,confidence:'medium',evidence:found.evidence};}
-   else{
-    const owned=ownedByName.get(compact(officer.name));
-    limitBreak=owned?{value:owned.limitBreak,confidence:'medium',evidence:'登録済み所有情報から補完'}:emptyField<number>('凸表示を確認できませんでした');
-   }
-  }else limitBreak=emptyField<number>('武将未確定のため凸も未確認です');
-  const values=assignedSkills[index]??[];
-  return {name,limitBreak,equippedSkills:[values[0]??emptyField<string>('装着戦法1を確認できませんでした'),values[1]??emptyField<string>('装着戦法2を確認できませんでした')]};
+  const officer=officerMatches[index];const name=officer?{value:officer.name,confidence:confidence(officer.score),evidence:officer.evidence}:emptyField<string>('武将名を確認できませんでした');let limitBreak:ImportedField<number>;
+  if(officer){const nearest=nearestUnused(awakenMatches,officer.index,usedAwaken);if(nearest!==undefined){usedAwaken.add(nearest);const found=awakenMatches[nearest]!;limitBreak={value:found.value,confidence:'medium',evidence:found.evidence};}else{const owned=ownedByName.get(compact(officer.name));limitBreak=owned?{value:owned.limitBreak,confidence:'medium',evidence:'登録済み所有情報から補完'}:emptyField<number>('凸表示を確認できませんでした');}}
+  else limitBreak=emptyField<number>('武将未確定のため凸も未確認です');
+  const values=assignedSkills[index]??[];return {name,limitBreak,equippedSkills:[values[0]??emptyField<string>('装着戦法1を確認できませんでした'),values[1]??emptyField<string>('装着戦法2を確認できませんでした')]};
  }) as FormationImageDraft['warriors'];
-
- const warnings:string[]=[];
- if(officerMatches.length<3)warnings.push(`武将は${officerMatches.length}/3名のみ確定しました。`);
- const skillCount=warriors.flatMap(warrior=>warrior.equippedSkills).filter(field=>field.value).length;
- if(skillCount<6)warnings.push(`装着戦法は${skillCount}/6枠のみ確定しました。`);
- if(warriors.some(warrior=>warrior.limitBreak.value===null))warnings.push('凸を読み取れない武将があります。画像内に表示がない場合は手動で確認してください。');
- const troopType=detectTroopType(rawText);if(!troopType.value)warnings.push('兵種を読み取れませんでした。');
-
+ const warnings:string[]=[];if(officerMatches.length<3)warnings.push(`武将は${officerMatches.length}/3名のみ確定しました。`);const skillCount=warriors.flatMap(warrior=>warrior.equippedSkills).filter(field=>field.value).length;if(skillCount<6)warnings.push(`装着戦法は${skillCount}/6枠のみ確定しました。`);if(warriors.some(warrior=>warrior.limitBreak.value===null))warnings.push('凸を読み取れない武将があります。画像内に表示がない場合は手動で確認してください。');const troopType=detectTroopType(rawText);if(!troopType.value)warnings.push('兵種を読み取れませんでした。');
  return {troopType,warriors,warnings,rawText};
+}
+
+export function parseFormationImages(
+ pages:readonly OcrPage[],officers:readonly CanonicalOfficer[],skills:readonly CanonicalSkill[],ownedWarriors:readonly WarriorRecord[]=[]
+):FormationImageDraft{
+ const segmentedSlots=new Set(pages.filter(page=>page.layout==='three-card'&&page.slot!==undefined).map(page=>page.slot));
+ return segmentedSlots.size>=2?parseSegmentedCards(pages,officers,skills,ownedWarriors):parseGenericPages(pages,officers,skills,ownedWarriors);
 }
