@@ -23,15 +23,18 @@ jobs:
       - run: npm audit --omit=dev
       - run: npm run build:runtime
       - run: npm run test:runtime
-      - run: npm test
+      - name: Run unit tests with diagnostic log
+        shell: bash
+        run: set -o pipefail; npm test 2>&1 | tee vitest.log
       - run: npm run build
       - run: npm run test:offline
       - run: npm run test:e2e
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: test-failure-report
           path: |
+            vitest.log
             playwright-report/
             test-results/
           if-no-files-found: ignore
