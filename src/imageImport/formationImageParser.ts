@@ -5,205 +5,111 @@ import type {CanonicalSkill} from '../services/canonicalSkillCatalog';
 
 export type ImportConfidence='high'|'medium'|'low'|'missing';
 export type ImportedField<T>={value:T|null;confidence:ImportConfidence;evidence:string};
-export type ImportedWarrior={
- name:ImportedField<string>;
- limitBreak:ImportedField<number>;
- equippedSkills:[ImportedField<string>,ImportedField<string>];
-};
-export type FormationImageDraft={
- troopType:ImportedField<UnitType>;
- warriors:[ImportedWarrior,ImportedWarrior,ImportedWarrior];
- warnings:string[];
- rawText:string;
-};
-export type OcrPage={
- text:string;
- confidence?:number;
- slot?:0|1|2;
- layout?:'three-card';
- limitBreak?:number;
- limitBreakConfidence?:'high'|'medium';
- limitBreakEvidence?:string;
-};
+export type ImportedWarrior={name:ImportedField<string>;limitBreak:ImportedField<number>;equippedSkills:[ImportedField<string>,ImportedField<string>]};
+export type FormationImageDraft={troopType:ImportedField<UnitType>;warriors:[ImportedWarrior,ImportedWarrior,ImportedWarrior];warnings:string[];rawText:string};
+export type OcrRow='card'|'inherent'|'equipped1'|'equipped2';
+export type OcrPage={text:string;confidence?:number;slot?:0|1|2;row?:OcrRow;layout?:'three-card';limitBreak?:number;limitBreakConfidence?:'high'|'medium';limitBreakEvidence?:string};
 
 type TextMatch={name:string;index:number;score:number;evidence:string};
 
 const unitAliases:{type:UnitType;aliases:string[]}[]=[
  {type:'足軽',aliases:['足軽','槍兵','歩兵']},
  {type:'騎馬',aliases:['騎馬','騎兵','馬兵']},
- {type:'鉄砲',aliases:['鉄砲','鉄炮','鉄砲兵','砲兵']},
+ {type:'鉄砲',aliases:['鉄砲','鉄炮','鉄怒','鉄砲兵','砲兵']},
  {type:'弓',aliases:['弓兵','弓']},
 ];
 
 export function normalizeImageText(value:string):string{
- return value.normalize('NFKC').replace(/鉄炮/g,'鉄砲').replace(/[‐‑‒–—―]/g,'-');
+ return value.normalize('NFKC')
+  .replace(/鉄炮|鉄怒/g,'鉄砲')
+  .replace(/破天の[尋農]/g,'破天の轟')
+  .replace(/城[凌盗]り/g,'城盗り')
+  .replace(/弾[履嵐]雨[敏銭霰]/g,'弾嵐雨霰')
+  .replace(/有備無[足思患]/g,'有備無患')
+  .replace(/[昔革草]木皆兵|革不形兵/g,'草木皆兵')
+  .replace(/[類畑]?[成威]同盟/g,'姻戚同盟')
+  .replace(/[‐‑‒–—―]/g,'-');
 }
 
-function compact(value:string):string{
- return normalizeImageText(value).replace(/[\s\p{P}\p{S}]/gu,'');
-}
+function compact(value:string):string{return normalizeImageText(value).replace(/[\s\p{P}\p{S}]/gu,'');}
 
 function levenshtein(a:string,b:string):number{
- if(a===b)return 0;
- if(!a.length)return b.length;
- if(!b.length)return a.length;
+ if(a===b)return 0;if(!a.length)return b.length;if(!b.length)return a.length;
  const previous=Array.from({length:b.length+1},(_,index)=>index);
- for(let i=1;i<=a.length;i++){
-  let left=i;let diagonal=i-1;
-  for(let j=1;j<=b.length;j++){
-   const above=previous[j]!;
-   const value=Math.min(above+1,left+1,diagonal+(a[i-1]===b[j-1]?0:1));
-   previous[j]=value;diagonal=above;left=value;
-  }
- }
+ for(let i=1;i<=a.length;i++){let left=i,diagonal=i-1;for(let j=1;j<=b.length;j++){const above=previous[j]!;const value=Math.min(above+1,left+1,diagonal+(a[i-1]===b[j-1]?0:1));previous[j]=value;diagonal=above;left=value;}}
  return previous[b.length]!;
 }
 
-function similarity(a:string,b:string):number{
- const longest=Math.max(a.length,b.length);
- return longest?1-levenshtein(a,b)/longest:0;
-}
+function similarity(a:string,b:string):number{const longest=Math.max(a.length,b.length);return longest?1-levenshtein(a,b)/longest:0;}
 
 function fuzzyLineMatch(lines:string[],name:string):TextMatch|undefined{
- const target=compact(name);
- if(target.length<2)return undefined;
- let best:TextMatch|undefined;let cursor=0;
- for(const raw of lines){
-  const line=compact(raw);
-  const lineStart=cursor;cursor+=raw.length+1;
-  if(!line)continue;
-  if(line.includes(target))return {name,index:lineStart+line.indexOf(target),score:.96,evidence:raw.trim()};
-  const min=Math.max(2,target.length-1),max=Math.min(line.length,target.length+1);
-  for(let size=min;size<=max;size++)for(let start=0;start+size<=line.length;start++){
-   const slice=line.slice(start,start+size);const score=similarity(target,slice);
-   const threshold=target.length<=3?.8:.72;
-   if(score>=threshold&&(!best||score>best.score))best={name,index:lineStart+start,score,evidence:raw.trim()};
-  }
- }
+ const target=compact(name);if(target.length<2)return undefined;let best:TextMatch|undefined,cursor=0;
+ for(const raw of lines){const line=compact(raw);const lineStart=cursor;cursor+=raw.length+1;if(!line)continue;if(line.includes(target))return {name,index:lineStart+line.indexOf(target),score:.96,evidence:raw.trim()};const min=Math.max(2,target.length-1),max=Math.min(line.length,target.length+1);for(let size=min;size<=max;size++)for(let start=0;start+size<=line.length;start++){const slice=line.slice(start,start+size),score=similarity(target,slice),threshold=target.length<=3?.8:.72;if(score>=threshold&&(!best||score>best.score))best={name,index:lineStart+start,score,evidence:raw.trim()};}}
  return best;
 }
 
 function catalogMatches(text:string,names:readonly string[],limit:number):TextMatch[]{
- const normalized=normalizeImageText(text);const compactText=compact(normalized);const lines=normalized.split(/\r?\n/);
- const matches:TextMatch[]=[];
- for(const name of names){
-  const target=compact(name);if(!target)continue;
-  const exact=compactText.indexOf(target);
-  if(exact>=0){matches.push({name,index:exact,score:1,evidence:name});continue;}
-  const fuzzy=fuzzyLineMatch(lines,name);if(fuzzy)matches.push(fuzzy);
- }
- const unique=new Map<string,TextMatch>();
- for(const match of matches.sort((a,b)=>b.score-a.score||a.index-b.index))if(!unique.has(match.name))unique.set(match.name,match);
- const strongest=Array.from(unique.values()).slice(0,Math.max(limit*3,limit));
- return strongest.sort((a,b)=>a.index-b.index||b.score-a.score).slice(0,limit);
+ const normalized=normalizeImageText(text),compactText=compact(normalized),lines=normalized.split(/\r?\n/),matches:TextMatch[]=[];
+ for(const name of names){const target=compact(name);if(!target)continue;const exact=compactText.indexOf(target);if(exact>=0){matches.push({name,index:exact,score:1,evidence:name});continue;}const fuzzy=fuzzyLineMatch(lines,name);if(fuzzy)matches.push(fuzzy);}
+ const unique=new Map<string,TextMatch>();for(const match of matches.sort((a,b)=>b.score-a.score||a.index-b.index))if(!unique.has(match.name))unique.set(match.name,match);
+ const strongest=Array.from(unique.values()).slice(0,Math.max(limit*3,limit));return strongest.sort((a,b)=>a.index-b.index||b.score-a.score).slice(0,limit);
 }
 
-function confidence(score:number):ImportConfidence{
- if(score>=.94)return 'high';
- if(score>=.8)return 'medium';
- return 'low';
-}
+function confidence(score:number):ImportConfidence{if(score>=.94)return 'high';if(score>=.8)return 'medium';return 'low';}
 
 function detectTroopType(text:string):ImportedField<UnitType>{
  const normalized=normalizeImageText(text);let best:{type:UnitType;index:number;alias:string}|undefined;
- for(const row of unitAliases)for(const alias of row.aliases){
-  const index=normalized.indexOf(alias);
-  if(index>=0&&(!best||index<best.index||alias.length>best.alias.length))best={type:row.type,index,alias};
- }
+ for(const row of unitAliases)for(const alias of row.aliases){const index=normalized.indexOf(alias);if(index>=0&&(!best||index<best.index||alias.length>best.alias.length))best={type:row.type,index,alias};}
  return best?{value:best.type,confidence:'high',evidence:best.alias}:{value:null,confidence:'missing',evidence:'兵種表記を確認できませんでした'};
 }
 
 function detectLimitBreaks(text:string):{value:number;index:number;evidence:string}[]{
- const normalized=normalizeImageText(text);const matches:{value:number;index:number;evidence:string}[]=[];
- const patterns=[/([0-5])\s*凸/g,/凸\s*([0-5])/g,/([★●◆■]{1,5})/g];
- for(const pattern of patterns){
-  for(const match of normalized.matchAll(pattern)){
-   const raw=match[0]??'';const value=match[1]&&/^\d$/.test(match[1])?Number(match[1]):Array.from(match[1]??'').length;
-   if(value>=0&&value<=5)matches.push({value,index:match.index??0,evidence:raw});
-  }
- }
+ const normalized=normalizeImageText(text),matches:{value:number;index:number;evidence:string}[]=[];const patterns=[/([0-5])\s*凸/g,/凸\s*([0-5])/g,/([★●◆■]{1,5})/g];
+ for(const pattern of patterns)for(const match of normalized.matchAll(pattern)){const raw=match[0]??'',value=match[1]&&/^\d$/.test(match[1])?Number(match[1]):Array.from(match[1]??'').length;if(value>=0&&value<=5)matches.push({value,index:match.index??0,evidence:raw});}
  return matches.sort((a,b)=>a.index-b.index);
 }
 
-function nearestUnused<T extends {index:number}>(items:T[],index:number,used:Set<number>):number|undefined{
- let selected:number|undefined;let distance=Number.POSITIVE_INFINITY;
- for(let i=0;i<items.length;i++){
-  if(used.has(i))continue;const current=Math.abs(items[i]!.index-index);
-  if(current<distance){distance=current;selected=i;}
- }
- return selected;
-}
-
+function nearestUnused<T extends {index:number}>(items:T[],index:number,used:Set<number>):number|undefined{let selected:number|undefined,distance=Number.POSITIVE_INFINITY;for(let i=0;i<items.length;i++){if(used.has(i))continue;const current=Math.abs(items[i]!.index-index);if(current<distance){distance=current;selected=i;}}return selected;}
 function emptyField<T>(evidence:string):ImportedField<T>{return {value:null,confidence:'missing',evidence};}
 
 function segmentedTroopType(pages:readonly OcrPage[],rawText:string):{field:ImportedField<UnitType>;conflict:boolean}{
- const detected=pages.map(page=>detectTroopType(page.text)).filter((field):field is ImportedField<UnitType>&{value:UnitType}=>field.value!==null);
+ const cardPages=pages.filter(page=>page.row==='card'||page.row===undefined);const detected=cardPages.map(page=>detectTroopType(page.text)).filter((field):field is ImportedField<UnitType>&{value:UnitType}=>field.value!==null);
  if(!detected.length)return {field:detectTroopType(rawText),conflict:false};
- const counts=new Map<UnitType,number>();detected.forEach(field=>counts.set(field.value,(counts.get(field.value)??0)+1));
- const ranked=Array.from(counts.entries()).sort((a,b)=>b[1]-a[1]);const [value,count]=ranked[0]!;const conflict=ranked.length>1;
+ const counts=new Map<UnitType,number>();detected.forEach(field=>counts.set(field.value,(counts.get(field.value)??0)+1));const ranked=Array.from(counts.entries()).sort((a,b)=>b[1]-a[1]);const [value,count]=ranked[0]!,conflict=ranked.length>1;
  return {field:{value,confidence:count>=2&&!conflict?'high':'medium',evidence:`${count}枚の武将カードで「${value}」を確認`},conflict};
 }
 
-function parseSegmentedCards(
- pages:readonly OcrPage[],officers:readonly CanonicalOfficer[],skills:readonly CanonicalSkill[],ownedWarriors:readonly WarriorRecord[]
-):FormationImageDraft{
- const rawText=pages.map(page=>`${page.slot===0?'大将':page.slot===1?'副将1':page.slot===2?'副将2':'画像'}\n${page.text}`).join('\n');
- const inherent=new Set(officers.map(officer=>compact(officer.inherentSkill)));
- const attachable=skills.filter(skill=>skill.attachable&&!inherent.has(compact(skill.name))).map(skill=>skill.name);
- const ownedByName=new Map(ownedWarriors.map(warrior=>[compact(warrior.name),warrior]));
+function inferOfficerFromInherent(text:string,officers:readonly CanonicalOfficer[]):{officer:CanonicalOfficer;match:TextMatch}|undefined{
+ const match=catalogMatches(text,officers.map(officer=>officer.inherentSkill),1)[0];if(!match)return undefined;const officer=officers.find(value=>compact(value.inherentSkill)===compact(match.name));return officer?{officer,match}:undefined;
+}
+
+function matchOneSkill(text:string,names:readonly string[]):TextMatch|undefined{return catalogMatches(text,names,1)[0];}
+
+function parseSegmentedCards(pages:readonly OcrPage[],officers:readonly CanonicalOfficer[],skills:readonly CanonicalSkill[],ownedWarriors:readonly WarriorRecord[]):FormationImageDraft{
+ const rawText=pages.map(page=>`${page.slot===0?'大将':page.slot===1?'副将1':page.slot===2?'副将2':'画像'}${page.row?` ${page.row}`:''}\n${page.text}`).join('\n');
+ const inherentNames=new Set(officers.map(officer=>compact(officer.inherentSkill))),attachable=skills.filter(skill=>skill.attachable&&!inherentNames.has(compact(skill.name))).map(skill=>skill.name),ownedByName=new Map(ownedWarriors.map(warrior=>[compact(warrior.name),warrior]));
  const warriors=([0,1,2] as const).map(slot=>{
-  const slotPages=pages.filter(page=>page.slot===slot);const text=slotPages.map(page=>page.text).join('\n');const officer=catalogMatches(text,officers.map(value=>value.name),1)[0];
-  const name=officer?{value:officer.name,confidence:confidence(officer.score),evidence:officer.evidence}:emptyField<string>('武将名を確認できませんでした');
-  const skillsFound=catalogMatches(text,attachable,4).filter((match,index,array)=>array.findIndex(value=>value.name===match.name)===index).slice(0,2);
-  let limitBreak:ImportedField<number>;
-  const pixel=slotPages.find(page=>page.limitBreak!==undefined);
+  const slotPages=pages.filter(page=>page.slot===slot),text=slotPages.map(page=>page.text).join('\n'),direct=catalogMatches(text,officers.map(value=>value.name),1)[0],inherentText=slotPages.filter(page=>page.row==='inherent').map(page=>page.text).join('\n'),inferred=inferOfficerFromInherent(inherentText,officers);
+  const officer=direct?officers.find(value=>value.name===direct.name):inferred?.officer;
+  const name=direct?{value:direct.name,confidence:confidence(direct.score),evidence:direct.evidence}:inferred?{value:inferred.officer.name,confidence:confidence(inferred.match.score),evidence:`固有戦法「${inferred.officer.inherentSkill}」から武将を特定`}:emptyField<string>('武将名と固有戦法を確認できませんでした');
+  const row1=slotPages.filter(page=>page.row==='equipped1').map(page=>page.text).join('\n'),row2=slotPages.filter(page=>page.row==='equipped2').map(page=>page.text).join('\n');let skill1=matchOneSkill(row1,attachable),skill2=matchOneSkill(row2,attachable);
+  if(!skill1||!skill2){const fallback=catalogMatches(slotPages.filter(page=>page.row!=='inherent').map(page=>page.text).join('\n'),attachable,4);if(!skill1)skill1=fallback.find(match=>match.name!==skill2?.name);if(!skill2)skill2=fallback.find(match=>match.name!==skill1?.name);}
+  let limitBreak:ImportedField<number>;const pixel=slotPages.find(page=>page.limitBreak!==undefined);
   if(pixel?.limitBreak!==undefined)limitBreak={value:pixel.limitBreak,confidence:pixel.limitBreakConfidence??'medium',evidence:pixel.limitBreakEvidence??`赤い凸マーク${pixel.limitBreak}個`};
-  else{
-   const textBreak=detectLimitBreaks(text)[0];
-   if(textBreak)limitBreak={value:textBreak.value,confidence:'medium',evidence:textBreak.evidence};
-   else if(officer){const owned=ownedByName.get(compact(officer.name));limitBreak=owned?{value:owned.limitBreak,confidence:'medium',evidence:'登録済み所有情報から補完'}:emptyField<number>('赤い凸マークを確認できませんでした');}
-   else limitBreak=emptyField<number>('武将未確定のため凸も未確認です');
-  }
-  return {name,limitBreak,equippedSkills:[skillsFound[0]?{value:skillsFound[0].name,confidence:confidence(skillsFound[0].score),evidence:skillsFound[0].evidence}:emptyField<string>('装着戦法1を確認できませんでした'),skillsFound[1]?{value:skillsFound[1].name,confidence:confidence(skillsFound[1].score),evidence:skillsFound[1].evidence}:emptyField<string>('装着戦法2を確認できませんでした')]} as ImportedWarrior;
+  else{const textBreak=detectLimitBreaks(text)[0];if(textBreak)limitBreak={value:textBreak.value,confidence:'medium',evidence:textBreak.evidence};else if(officer){const owned=ownedByName.get(compact(officer.name));limitBreak=owned?{value:owned.limitBreak,confidence:'medium',evidence:'登録済み所有情報から補完'}:emptyField<number>('赤い凸マークを確認できませんでした');}else limitBreak=emptyField<number>('武将未確定のため凸も未確認です');}
+  return {name,limitBreak,equippedSkills:[skill1?{value:skill1.name,confidence:confidence(skill1.score),evidence:skill1.evidence}:emptyField<string>('装着戦法1を確認できませんでした'),skill2?{value:skill2.name,confidence:confidence(skill2.score),evidence:skill2.evidence}:emptyField<string>('装着戦法2を確認できませんでした')]} as ImportedWarrior;
  }) as FormationImageDraft['warriors'];
- const warnings:string[]=[];const officerCount=warriors.filter(warrior=>warrior.name.value).length;if(officerCount<3)warnings.push(`武将は${officerCount}/3名のみ確定しました。`);
- const skillCount=warriors.flatMap(warrior=>warrior.equippedSkills).filter(field=>field.value).length;if(skillCount<6)warnings.push(`装着戦法は${skillCount}/6枠のみ確定しました。`);
- if(warriors.some(warrior=>warrior.limitBreak.value===null))warnings.push('赤い凸マークを読み取れない武将があります。手動で確認してください。');
- const troop=segmentedTroopType(pages,rawText);if(!troop.field.value)warnings.push('兵種を読み取れませんでした。');if(troop.conflict)warnings.push('武将カード間で兵種の読取結果が一致しません。');
+ const warnings:string[]=[],officerCount=warriors.filter(warrior=>warrior.name.value).length,skillCount=warriors.flatMap(warrior=>warrior.equippedSkills).filter(field=>field.value).length;if(officerCount<3)warnings.push(`武将は${officerCount}/3名のみ確定しました。`);if(skillCount<6)warnings.push(`装着戦法は${skillCount}/6枠のみ確定しました。`);if(warriors.some(warrior=>warrior.limitBreak.value===null))warnings.push('赤い凸マークを読み取れない武将があります。手動で確認してください。');const troop=segmentedTroopType(pages,rawText);if(!troop.field.value)warnings.push('兵種を読み取れませんでした。');if(troop.conflict)warnings.push('武将カード間で兵種の読取結果が一致しません。');
  return {troopType:troop.field,warriors,warnings,rawText};
 }
 
-function parseGenericPages(
- pages:readonly OcrPage[],officers:readonly CanonicalOfficer[],skills:readonly CanonicalSkill[],ownedWarriors:readonly WarriorRecord[]
-):FormationImageDraft{
- const rawText=pages.map(page=>page.text).join('\n');
- const officerMatches=catalogMatches(rawText,officers.map(officer=>officer.name),3);
- const inherent=new Set(officers.map(officer=>compact(officer.inherentSkill)));
- const attachable=skills.filter(skill=>skill.attachable&&!inherent.has(compact(skill.name))).map(skill=>skill.name);
- const skillMatches=catalogMatches(rawText,attachable,12).filter((match,index,array)=>array.findIndex(value=>value.name===match.name)===index);
- const awakenMatches=detectLimitBreaks(rawText);const usedAwaken=new Set<number>();
- const ownedByName=new Map(ownedWarriors.map(warrior=>[compact(warrior.name),warrior]));
- const assignedSkills:[ImportedField<string>[],ImportedField<string>[],ImportedField<string>[]]=[[],[],[]];
- for(const skill of skillMatches){
-  const preceding=officerMatches.map((officer,index)=>({officer,index})).filter(row=>row.officer.index<=skill.index&&assignedSkills[row.index]!.length<2).sort((a,b)=>b.officer.index-a.officer.index)[0];
-  let warriorIndex=preceding?.index;
-  if(warriorIndex===undefined){let bestDistance=Number.POSITIVE_INFINITY;officerMatches.forEach((officer,index)=>{if(assignedSkills[index]!.length>=2)return;const distance=Math.abs(skill.index-officer.index);if(distance<bestDistance){bestDistance=distance;warriorIndex=index;}});}
-  if(warriorIndex===undefined||assignedSkills[warriorIndex]!.length>=2){const open=assignedSkills.findIndex(values=>values.length<2);if(open>=0)warriorIndex=open;}
-  if(warriorIndex!==undefined&&warriorIndex<3&&assignedSkills[warriorIndex]!.length<2)assignedSkills[warriorIndex]!.push({value:skill.name,confidence:confidence(skill.score),evidence:skill.evidence});
- }
- const warriors=Array.from({length:3},(_,index):ImportedWarrior=>{
-  const officer=officerMatches[index];const name=officer?{value:officer.name,confidence:confidence(officer.score),evidence:officer.evidence}:emptyField<string>('武将名を確認できませんでした');let limitBreak:ImportedField<number>;
-  if(officer){const nearest=nearestUnused(awakenMatches,officer.index,usedAwaken);if(nearest!==undefined){usedAwaken.add(nearest);const found=awakenMatches[nearest]!;limitBreak={value:found.value,confidence:'medium',evidence:found.evidence};}else{const owned=ownedByName.get(compact(officer.name));limitBreak=owned?{value:owned.limitBreak,confidence:'medium',evidence:'登録済み所有情報から補完'}:emptyField<number>('凸表示を確認できませんでした');}}
-  else limitBreak=emptyField<number>('武将未確定のため凸も未確認です');
-  const values=assignedSkills[index]??[];return {name,limitBreak,equippedSkills:[values[0]??emptyField<string>('装着戦法1を確認できませんでした'),values[1]??emptyField<string>('装着戦法2を確認できませんでした')]};
- }) as FormationImageDraft['warriors'];
- const warnings:string[]=[];if(officerMatches.length<3)warnings.push(`武将は${officerMatches.length}/3名のみ確定しました。`);const skillCount=warriors.flatMap(warrior=>warrior.equippedSkills).filter(field=>field.value).length;if(skillCount<6)warnings.push(`装着戦法は${skillCount}/6枠のみ確定しました。`);if(warriors.some(warrior=>warrior.limitBreak.value===null))warnings.push('凸を読み取れない武将があります。画像内に表示がない場合は手動で確認してください。');const troopType=detectTroopType(rawText);if(!troopType.value)warnings.push('兵種を読み取れませんでした。');
- return {troopType,warriors,warnings,rawText};
+function parseGenericPages(pages:readonly OcrPage[],officers:readonly CanonicalOfficer[],skills:readonly CanonicalSkill[],ownedWarriors:readonly WarriorRecord[]):FormationImageDraft{
+ const rawText=pages.map(page=>page.text).join('\n'),officerMatches=catalogMatches(rawText,officers.map(officer=>officer.name),3),inherent=new Set(officers.map(officer=>compact(officer.inherentSkill))),attachable=skills.filter(skill=>skill.attachable&&!inherent.has(compact(skill.name))).map(skill=>skill.name),skillMatches=catalogMatches(rawText,attachable,12).filter((match,index,array)=>array.findIndex(value=>value.name===match.name)===index),awakenMatches=detectLimitBreaks(rawText),usedAwaken=new Set<number>(),ownedByName=new Map(ownedWarriors.map(warrior=>[compact(warrior.name),warrior])),assignedSkills:[ImportedField<string>[],ImportedField<string>[],ImportedField<string>[]]=[[],[],[]];
+ for(const skill of skillMatches){const preceding=officerMatches.map((officer,index)=>({officer,index})).filter(row=>row.officer.index<=skill.index&&assignedSkills[row.index]!.length<2).sort((a,b)=>b.officer.index-a.officer.index)[0];let warriorIndex=preceding?.index;if(warriorIndex===undefined){let bestDistance=Number.POSITIVE_INFINITY;officerMatches.forEach((officer,index)=>{if(assignedSkills[index]!.length>=2)return;const distance=Math.abs(skill.index-officer.index);if(distance<bestDistance){bestDistance=distance;warriorIndex=index;}});}if(warriorIndex===undefined||assignedSkills[warriorIndex]!.length>=2){const open=assignedSkills.findIndex(values=>values.length<2);if(open>=0)warriorIndex=open;}if(warriorIndex!==undefined&&warriorIndex<3&&assignedSkills[warriorIndex]!.length<2)assignedSkills[warriorIndex]!.push({value:skill.name,confidence:confidence(skill.score),evidence:skill.evidence});}
+ const warriors=Array.from({length:3},(_,index):ImportedWarrior=>{const officer=officerMatches[index],name=officer?{value:officer.name,confidence:confidence(officer.score),evidence:officer.evidence}:emptyField<string>('武将名を確認できませんでした');let limitBreak:ImportedField<number>;if(officer){const nearest=nearestUnused(awakenMatches,officer.index,usedAwaken);if(nearest!==undefined){usedAwaken.add(nearest);const found=awakenMatches[nearest]!;limitBreak={value:found.value,confidence:'medium',evidence:found.evidence};}else{const owned=ownedByName.get(compact(officer.name));limitBreak=owned?{value:owned.limitBreak,confidence:'medium',evidence:'登録済み所有情報から補完'}:emptyField<number>('凸表示を確認できませんでした');}}else limitBreak=emptyField<number>('武将未確定のため凸も未確認です');const values=assignedSkills[index]??[];return {name,limitBreak,equippedSkills:[values[0]??emptyField<string>('装着戦法1を確認できませんでした'),values[1]??emptyField<string>('装着戦法2を確認できませんでした')]};}) as FormationImageDraft['warriors'];
+ const warnings:string[]=[];if(officerMatches.length<3)warnings.push(`武将は${officerMatches.length}/3名のみ確定しました。`);const skillCount=warriors.flatMap(warrior=>warrior.equippedSkills).filter(field=>field.value).length;if(skillCount<6)warnings.push(`装着戦法は${skillCount}/6枠のみ確定しました。`);if(warriors.some(warrior=>warrior.limitBreak.value===null))warnings.push('凸を読み取れない武将があります。画像内に表示がない場合は手動で確認してください。');const troopType=detectTroopType(rawText);if(!troopType.value)warnings.push('兵種を読み取れませんでした。');return {troopType,warriors,warnings,rawText};
 }
 
-export function parseFormationImages(
- pages:readonly OcrPage[],officers:readonly CanonicalOfficer[],skills:readonly CanonicalSkill[],ownedWarriors:readonly WarriorRecord[]=[]
-):FormationImageDraft{
- const segmentedSlots=new Set(pages.filter(page=>page.layout==='three-card'&&page.slot!==undefined).map(page=>page.slot));
- return segmentedSlots.size>=2?parseSegmentedCards(pages,officers,skills,ownedWarriors):parseGenericPages(pages,officers,skills,ownedWarriors);
+export function parseFormationImages(pages:readonly OcrPage[],officers:readonly CanonicalOfficer[],skills:readonly CanonicalSkill[],ownedWarriors:readonly WarriorRecord[]=[]):FormationImageDraft{
+ const segmentedSlots=new Set(pages.filter(page=>page.layout==='three-card'&&page.slot!==undefined).map(page=>page.slot));return segmentedSlots.size>=2?parseSegmentedCards(pages,officers,skills,ownedWarriors):parseGenericPages(pages,officers,skills,ownedWarriors);
 }
