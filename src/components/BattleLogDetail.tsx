@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useState} from 'react';
-import {Activity,ChevronDown,Gauge,Shield,Snapshot,Swords} from 'lucide-react';
+import {Activity,ChevronDown,Gauge} from 'lucide-react';
 import type {BattleResult,Formation} from '../domain/schemas';
 import {toPublicRuntimePayload} from '../domain/engineBrand';
 import {buildBattleSnapshot,enrichTraceRoles,extractRepresentativeTrace,formationsForBattleResult,parseBattleSnapshot,type BattleOfficerSnapshot,type BattleSide,type BattleSnapshot,type StatValues} from '../battleLog/battleLogView';
