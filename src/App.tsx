@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Download,Upload,Trash2,Swords,Square,Plus,Pencil,Target,Save,CheckCircle2} from 'lucide-react';
+import {Download,Upload,Trash2,Swords,Square,Plus,Pencil,Target,Save,CheckCircle2,ImagePlus} from 'lucide-react';
 import {Button} from './components/ui/button';
 import {FormationEditor} from './components/FormationEditor';
 import {CatalogManager} from './components/CatalogManager';
@@ -20,12 +20,13 @@ import {loadCanonicalSkillCatalog} from './services/canonicalSkillCatalog';
 import {ENGINE_DISPLAY_NAME,ENGINE_DISPLAY_SUBTITLE,ENGINE_RESULT_LABEL,toPublicRuntimePayload} from './domain/engineBrand';
 
 type Page='formations'|'battle'|'data';
+type EditingState=Formation|'new'|'image'|null;
 
 export default function App(){
  const store=useAppStore();
  const input=useRef<HTMLInputElement>(null);
  const [page,setPage]=useState<Page>('formations');
- const [editing,setEditing]=useState<Formation|'new'|null>(null);
+ const [editing,setEditing]=useState<EditingState>(null);
  const [notice,setNotice]=useState('');
  const [running,setRunning]=useState(false);
  const [result,setResult]=useState<RuntimeResult|null>(null);
@@ -121,7 +122,7 @@ export default function App(){
   finally{setRunning(false);}
  }
 
- if(editing)return <Shell>{store.error&&<StorageError message={store.error} onClose={store.clearError}/>}<FormationEditor initial={editing==='new'?undefined:editing} warriors={store.warriors} skills={store.skills} onCancel={()=>setEditing(null)} onSave={async value=>{try{await store.save(value);setEditing(null);setNotice('編成を保存しました');}catch{/* store error remains visible */}}}/></Shell>;
+ if(editing)return <Shell>{store.error&&<StorageError message={store.error} onClose={store.clearError}/>}<FormationEditor initial={editing==='new'||editing==='image'?undefined:editing} initialImageImportOpen={editing==='image'} warriors={store.warriors} skills={store.skills} onCancel={()=>setEditing(null)} onSave={async value=>{try{await store.save(value);setEditing(null);setNotice('編成を保存しました');}catch{/* store error remains visible */}}}/></Shell>;
 
  return <Shell>
   <PwaStatus/><InstallGuide/>
@@ -130,7 +131,12 @@ export default function App(){
    {notice&&<p role="status" className="rounded-xl bg-amber-950 p-3 text-sm text-amber-300">{notice}</p>}
 
    {page==='formations'&&<>
-    <div className="flex items-center justify-between"><h2 className="text-xl font-bold">編成</h2><Button onClick={()=>setEditing('new')}><Plus className="mr-2 size-4"/>新規</Button></div>
+    <div><h2 className="text-xl font-bold">編成</h2><p className="mt-1 text-sm text-slate-400">画像から読み込むか、手入力で登録します。</p></div>
+    <section className="rounded-2xl border border-cyan-700 bg-cyan-950/30 p-4">
+     <div className="flex items-start gap-3"><ImagePlus className="mt-1 size-6 shrink-0 text-cyan-300"/><div><h3 className="font-bold text-cyan-200">スクリーンショットから登録</h3><p className="mt-1 text-xs leading-5 text-slate-300">ゲームの編成画像から、兵種・武将・凸・装着戦法を読み取ります。解析結果を確認してから保存できます。</p></div></div>
+     <Button className="mt-4 w-full" onClick={()=>setEditing('image')}><ImagePlus className="mr-2 size-5"/>画像から編成登録</Button>
+    </section>
+    <div className="flex items-center justify-between"><h3 className="font-bold">登録済み編成</h3><Button variant="secondary" onClick={()=>setEditing('new')}><Plus className="mr-2 size-4"/>手入力で新規</Button></div>
     {store.loading&&<p>読込中...</p>}
     {!store.loading&&!store.formations.length&&<p className="rounded-2xl border border-slate-700 bg-slate-900 py-12 text-center text-slate-500">編成を登録してください</p>}
     {store.formations.map(formation=><article key={formation.id} className="flex items-center justify-between rounded-2xl border border-slate-700 bg-slate-900 p-4"><div><strong>{formation.name}</strong><p className="text-xs text-slate-400">{formation.troopType} Lv{formation.troopLevel}・兵力{formation.troops}</p><p className="mt-1 text-xs text-slate-500">{formation.warriors.map(value=>value.name).join('・')}</p></div><div className="flex gap-2"><Button aria-label={`${formation.name}を編集`} variant="secondary" onClick={()=>setEditing(formation)}><Pencil className="size-4"/></Button><Button aria-label={`${formation.name}を削除`} variant="danger" onClick={()=>{if(window.confirm(`${formation.name}を削除しますか？`))void store.remove(formation.id).catch(()=>{});}}><Trash2 className="size-4"/></Button></div></article>)}
