@@ -12,6 +12,7 @@ const defaultUnitLevelRule={baseLevel:5,defaultCap:10,capUnlockMode:'unbounded'}
 
 type Props={
  initial?:Formation;
+ initialImageImportOpen?:boolean;
  warriors?:WarriorRecord[];
  skills?:SkillRecord[];
  canonicalOfficers?:CanonicalOfficer[];
@@ -32,7 +33,7 @@ function slotLabel(location:EquippedSkillLocation):string{
  return `${roles[location.warriorIndex]??`武将${location.warriorIndex+1}`}の装着戦法${location.skillIndex+1}`;
 }
 
-export function FormationEditor({initial,warriors=[],skills=[],canonicalOfficers,canonicalSkills,onSave,onCancel}:Props){
+export function FormationEditor({initial,initialImageImportOpen=false,warriors=[],skills=[],canonicalOfficers,canonicalSkills,onSave,onCancel}:Props){
  const [value,setValue]=useState<Formation>(()=>structuredClone(initial??createEmptyFormation()));
  const [officerCatalog,setOfficerCatalog]=useState<CanonicalOfficer[]>(canonicalOfficers??[]);
  const [skillCatalog,setSkillCatalog]=useState<CanonicalSkill[]>(canonicalSkills??[]);
@@ -197,7 +198,7 @@ export function FormationEditor({initial,warriors=[],skills=[],canonicalOfficers
  const capDetails=troopLevel.capUnlocked?'上限解放済み・天井なし':`上限${troopLevel.cap}`;
 
  return <form onSubmit={e=>void submit(e)} className="space-y-4">
-  <ImageFormationImporter officers={officerCatalog} skills={skillCatalog} ownedWarriors={warriors} onApply={applyImageImport}/>
+  <ImageFormationImporter initialOpen={initialImageImportOpen} officers={officerCatalog} skills={skillCatalog} ownedWarriors={warriors} onApply={applyImageImport}/>
   <section className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
    <h2 className="mb-4 text-lg font-bold">編成編集</h2>
    <div className="grid grid-cols-2 gap-3">
