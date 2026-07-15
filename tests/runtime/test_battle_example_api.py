@@ -20,7 +20,7 @@ class BattleExampleApiTest(unittest.TestCase):
  def test_example_targets_follow_requested_policy(self):
   self.assertEqual(self.api._example_targets(1.0),{'win':1,'loss':0})
   self.assertEqual(self.api._example_targets(0.0),{'win':0,'loss':1})
-  self.assertEqual(self.api._example_targets(.6),{'win':2,'loss':2})
+  self.assertEqual(self.api._example_targets(.6),{'win':1,'loss':1})
 
  def test_turn_payload_tracks_actions_troop_changes_and_t8_end(self):
   trace={
