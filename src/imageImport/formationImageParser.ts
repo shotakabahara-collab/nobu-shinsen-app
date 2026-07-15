@@ -89,7 +89,7 @@ function pageWeight(page:OcrPage):number{
 function consensusCatalogMatches(pages:readonly OcrPage[],names:readonly string[],limit:number,excluded:ReadonlySet<string>=new Set()):TextMatch[]{
  const buckets=new Map<string,MatchBucket>();
  for(const page of pages){
-  const pageMatches=catalogMatches(page.text,names,Math.min(3,Math.max(1,limit+1))).filter(match=>!excluded.has(match.name));
+  const pageMatches=catalogMatches(page.text,names,Math.min(16,Math.max(3,limit))).filter(match=>!excluded.has(match.name));
   const seen=new Set<string>();
   pageMatches.forEach((match,rank)=>{
    if(seen.has(match.name))return;seen.add(match.name);
