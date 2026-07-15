@@ -12,6 +12,11 @@ OFFICER_CATALOG_OUT=ROOT/'public/canonical_officer_catalog.json'
 SKILL_CATALOG_OUT=ROOT/'public/canonical_skill_catalog.json'
 UNIT_TYPES={'足軽','騎馬','鉄砲','弓'}
 
+# User-confirmed correction. The canonical source currently assigns the attachable
+# skill 有備無患 as 蜂須賀家政's inherent skill. The correct inherent skill name is
+# not confirmed, so the app must not invent one or classify 有備無患 as inherent.
+REJECTED_INHERENT_SKILLS={('蜂須賀家政','有備無患')}
+
 
 def sha(path:Path)->str:
     h=hashlib.sha256()
@@ -67,11 +72,21 @@ def unlocked_at(value)->int:
 
 def build_officer_catalog(rows:list[dict],trait_rows:list[dict])->dict:
     officers={}
+    corrections=[]
     for row in rows:
         name=str(row.get('武将名') or '').strip()
-        inherent=str(row.get('固有戦法名') or '').strip()
+        source_inherent=str(row.get('固有戦法名') or '').strip()
         officer_id=str(row.get('武将ID') or '').strip()
-        if not name or not inherent or not officer_id:continue
+        if not name or not source_inherent or not officer_id:continue
+        inherent=source_inherent
+        if (name,source_inherent) in REJECTED_INHERENT_SKILLS:
+            inherent='未確認'
+            corrections.append({
+                'officerName':name,
+                'rejectedInherentSkill':source_inherent,
+                'replacement':'未確認',
+                'reason':'ユーザー確定情報：有備無患は固有戦法ではなく装着戦法',
+            })
         current=officers.get(name)
         entry={'id':officer_id,'name':name,'inherentSkill':inherent}
         if current and current!=entry:raise SystemExit(f'canonical officer catalog conflict: {name}: {current} != {entry}')
@@ -111,6 +126,7 @@ def build_officer_catalog(rows:list[dict],trait_rows:list[dict])->dict:
             'traitName':'特性名','traitUnlock':'開放段階','traitUnitTypes':'対象兵種',
             'traitLevelBonus':'兵種Lv加算','traitCapUnlock':'上限解放',
         },
+        'corrections':corrections,
         'officerCount':len(officers),
         'officers':sorted(officers.values(),key=lambda row:row['name']),
     })
