@@ -64,16 +64,16 @@ test('shows 100-run win-loss examples, T1-T8 actions and troop changes online an
  await page.getByRole('button',{name:/山本騎馬 vs 黒田弓/}).click();
  await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('60.0%');
  await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('完了200試行');
- await expect(page.getByRole('region',{name:'勝敗別戦闘例'})).toBeVisible();
- await expect(page.getByRole('button',{name:'勝ち例1'})).toBeVisible();await expect(page.getByRole('button',{name:'負け例1'})).toBeVisible();
- await expect(page.getByRole('button',{name:'勝ち例2'})).toHaveCount(0);await expect(page.getByRole('button',{name:'負け例2'})).toHaveCount(0);
- await expect(page.getByText('T1',{exact:true})).toBeVisible();await expect(page.getByText('T8',{exact:true})).toBeVisible();
- await expect(page.getByText(/通常攻撃 -> B:黒田官兵衛 1000/)).toBeVisible();
- await expect(page.getByText(/10,000 → 9,000/)).toBeVisible();
- await page.getByRole('button',{name:'負け例1'}).click();await expect(page.getByText(/seed 200/)).toBeVisible();
+ const examples=page.getByRole('region',{name:'勝敗別戦闘例'});await expect(examples).toBeVisible();
+ await expect(examples.getByRole('button',{name:'勝ち例1'})).toBeVisible();await expect(examples.getByRole('button',{name:'負け例1'})).toBeVisible();
+ await expect(examples.getByRole('button',{name:'勝ち例2'})).toHaveCount(0);await expect(examples.getByRole('button',{name:'負け例2'})).toHaveCount(0);
+ await expect(examples.getByText('T1',{exact:true})).toBeVisible();await expect(examples.getByText('T8',{exact:true})).toBeVisible();
+ await expect(examples.getByText(/通常攻撃 -> B:黒田官兵衛 1000/)).toBeVisible();
+ await expect(examples.getByText(/10,000 → 9,000/)).toBeVisible();
+ await examples.getByRole('button',{name:'負け例1'}).click();await expect(examples.getByText(/seed 200/)).toBeVisible();
  await page.getByRole('button',{name:'閉じる'}).click();
 
  await page.evaluate(async()=>{await navigator.serviceWorker.ready;});await context.setOffline(true);await page.reload();
  await expect(page.getByText('オフラインで利用中',{exact:true})).toBeVisible();await page.getByRole('button',{name:'対戦・提案'}).click();await page.getByRole('button',{name:/山本騎馬 vs 黒田弓/}).click();
- await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('60.0%');await expect(page.getByText('T8',{exact:true})).toBeVisible();
+ const offlineExamples=page.getByRole('region',{name:'勝敗別戦闘例'});await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('60.0%');await expect(offlineExamples.getByText('T8',{exact:true})).toBeVisible();
 });
