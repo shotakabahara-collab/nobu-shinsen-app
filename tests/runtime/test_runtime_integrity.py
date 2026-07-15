@@ -37,6 +37,8 @@ class RuntimeIntegrityTest(unittest.TestCase):
   self.assertEqual(len(names),len(set(names)))
   by_name={row['name']:row for row in catalog['officers']}
   self.assertEqual(by_name['松永久秀']['inherentSkill'],'梟雄の計')
+  self.assertEqual(by_name['鈴木佐大夫']['inherentSkill'],'弾嵐雨霰')
+  self.assertNotIn('有備無患',{row['inherentSkill'] for row in catalog['officers']})
   self.assertIn({'name':'砲術Ⅲ','unlockedAt':3,'unitTypes':['鉄砲'],'levelBonus':3,'capUnlock':False,'capBonus':0},by_name['松永久秀']['unitLevelTraits'])
   self.assertIn({'name':'騎兵大将','unlockedAt':0,'unitTypes':['騎馬'],'levelBonus':3,'capUnlock':True,'capBonus':1},by_name['柿崎景家']['unitLevelTraits'])
 
@@ -52,6 +54,8 @@ class RuntimeIntegrityTest(unittest.TestCase):
   by_name={row['name']:row for row in catalog['skills']}
   self.assertTrue(by_name['紅蓮の炎']['attachable'])
   self.assertFalse(by_name['梟雄の計']['attachable'])
+  self.assertTrue(by_name['有備無患']['attachable'])
+  self.assertNotEqual(by_name['有備無患']['type'],'固有')
   self.assertTrue(all(isinstance(row.get('unitLevelEffects'),list) for row in catalog['skills']))
   self.assertEqual(by_name['紅蓮の炎']['unitLevelEffects'],[])
 
