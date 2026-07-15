@@ -53,9 +53,9 @@ export function extractRepresentativeTrace(payload:Record<string,unknown>,direct
  const firstBlock=record(directionBlocks[0]),representatives=array(firstBlock?.representative_traces),representative=record(representatives[0]),digest=record(representative?.timeline_digest);
  if(!representative||!digest)return undefined;
  const digestTurns=record(digest.action_order_digest)??{};
- const turns=Object.entries(digestTurns).map(([turnValue,rows])=>({
-  turn:Number(turnValue),entries:array(rows).map(rowValue=>{
-   const row=record(rowValue)??{},rawSide=row.side==='B'?'B':'A',side=canonicalSide(direction,rawSide);
+ const turns:ActionOrderTurn[]=Object.entries(digestTurns).map(([turnValue,rows])=>({
+  turn:Number(turnValue),entries:array(rows).map((rowValue):ActionOrderEntry=>{
+   const row=record(rowValue)??{};const rawSide:'A'|'B'=row.side==='B'?'B':'A';const side=canonicalSide(direction,rawSide);
    return {rank:numberOrNull(row.rank)??0,side,rawSide,officer:stringOr(row.officer,'未確認'),role:'',effectiveSpeed:numberOrNull(row.effective_speed),baseSpeed:numberOrNull(row.base_speed),timedSpeedBonus:numberOrNull(row.timed_speed_bonus)??0,persistentSpeedBonus:numberOrNull(row.persistent_speed_bonus)??0};
   }).sort((a,b)=>a.rank-b.rank),
  })).filter(row=>Number.isFinite(row.turn)).sort((a,b)=>a.turn-b.turn);
