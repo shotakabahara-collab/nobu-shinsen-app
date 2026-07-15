@@ -31,6 +31,7 @@ describe('BattleLogDetail',()=>{
   const log:BattleResult={...baseLog,payload};render(<BattleLogDetail log={log} formations={[]} onClose={()=>{}}/>);
   const summary=screen.getByRole('region',{name:'100戦結果'});expect(within(summary).getByText('100戦の勝率')).toBeVisible();expect(within(summary).getByText('58.0%')).toBeVisible();expect(within(summary).getByText('58')).toBeVisible();expect(within(summary).getByText('38')).toBeVisible();
   const examples=screen.getByRole('region',{name:'戦闘例'});expect(within(examples).getAllByText('勝ち例')).toHaveLength(1);expect(within(examples).getAllByText('負け例')).toHaveLength(1);
-  expect(within(examples).getAllByText(/^T8.*戦闘終了済み$/)).toHaveLength(2);expect(within(examples).getByText('兵数 -100　10,000 → 9,900')).toBeVisible();
+  expect(within(examples).getAllByText(/^T8.*戦闘終了済み$/)).toHaveLength(2);
+  expect(within(examples).getByText((_,element)=>element?.tagName==='P'&&Boolean(element.textContent?.includes('兵数 -100')&&element.textContent.includes('10,000 → 9,900')))).toBeVisible();
  });
 });
