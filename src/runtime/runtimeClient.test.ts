@@ -12,7 +12,7 @@ class WorkerMock{
  constructor(){WorkerMock.instances.push(this);}
 }
 
-const request:CalculateRequest={candidate:{officers:['一','二','三'],awaken:[0,0,0],unit:'騎馬',unit_level:10,troops:10000,skills:['A','B','C','D','E','F'],fixed_placement:true,ignore_formal_overlap:true},target:'enemy',trials:1,blocks:1,seed:1,include_detail:false};
+const request:CalculateRequest={candidate:{officers:['一','二','三'],awaken:[0,0,0],unit:'騎馬',unit_level:10,troops:10000,skills:['A','B','C','D','E','F'],fixed_placement:true,ignore_formal_overlap:true},target:'enemy',trials:1,blocks:1,seed:1,include_detail:false,include_examples:false};
 
 describe('RuntimeClient',()=>{
  afterEach(()=>{WorkerMock.instances=[];vi.unstubAllGlobals();});

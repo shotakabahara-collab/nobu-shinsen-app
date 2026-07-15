@@ -65,6 +65,7 @@ export const deviceReleaseRequest:CalculateRequest={
  blocks:1,
  seed:1326257000,
  include_detail:false,
+ include_examples:false,
 };
 
 export function validateDeviceRuntimeResult(result:RuntimeResult){

@@ -1,6 +1,6 @@
 import {expect,test} from '@playwright/test';
 
-test.setTimeout(300_000);
+test.setTimeout(600_000);
 
 const now='2026-07-13T00:00:00.000Z';
 const warrior=(id:string,name:string,limitBreak:number,equippedSkills:[string,string])=>({id,name,limitBreak,inherentSkill:'固有戦法',equippedSkills});
@@ -24,7 +24,7 @@ const backup={
  ],
 };
 
-test('runs the real canonical calculate flow in an iPhone WebKit environment',async({page})=>{
+test('runs the real canonical 100-battle flow in an iPhone WebKit environment',async({page})=>{
  await page.goto('./');
  await expect(page.getByRole('heading',{name:'NOBU Companion'})).toBeVisible();
  await expect(page.getByText('正本準拠シミュレーション',{exact:true})).toBeVisible();
@@ -32,18 +32,16 @@ test('runs the real canonical calculate flow in an iPhone WebKit environment',as
  expect(await page.evaluate(()=>navigator.userAgent)).toContain('AppleWebKit');
  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute('content','yes');
  await expect(page.getByText('iPhoneホーム画面に追加')).toBeVisible();
-
  await page.getByRole('button',{name:'データ'}).click();
  await page.locator('input[type="file"]').setInputFiles({name:'webkit-canonical-e2e.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
  await expect(page.getByText('バックアップを復元しました（編成2件）',{exact:true})).toBeVisible();
-
  await page.getByRole('button',{name:'対戦・提案'}).click();
  await page.getByLabel('編成A').selectOption(backup.formations[0].id);
  await page.getByLabel('編成B').selectOption(backup.formations[1].id);
- await page.getByRole('button',{name:'10×1で対戦'}).click();
- await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
+ await page.getByRole('button',{name:'100戦で対戦'}).click();
+ await expect(page.getByText('山本騎馬と黒田弓の100戦計算が完了しました',{exact:true})).toBeVisible({timeout:540_000});
  await expect(page.getByText('山本騎馬の勝率')).toBeVisible();
+ await expect(page.getByText(/合計 100戦（正逆50戦ずつ）・HP差/).first()).toBeVisible();
  await expect(page.getByText('正本準拠エンジンで計算済み',{exact:true})).toBeVisible();
  await expect(page.locator('body')).not.toContainText(/b223/i);
- await expect(page.getByText(/^HP差 /)).toBeVisible();
 });

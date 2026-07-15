@@ -1,46 +1,169 @@
 import {useEffect,useMemo,useState} from 'react';
-import {Activity,ChevronDown,Gauge} from 'lucide-react';
+import {Activity,ChevronDown,Gauge,Swords,Users} from 'lucide-react';
 import type {BattleResult,Formation} from '../domain/schemas';
 import {toPublicRuntimePayload} from '../domain/engineBrand';
-import {buildBattleSnapshot,buildInitialActionOrderTrace,enrichTraceRoles,extractRepresentativeTrace,formationsForBattleResult,parseBattleSnapshot,type BattleOfficerSnapshot,type BattleSide,type BattleSnapshot,type StatValues} from '../battleLog/battleLogView';
+import {
+ buildBattleSnapshot,
+ buildInitialActionOrderTrace,
+ enrichExampleRoles,
+ enrichTraceRoles,
+ extractRepresentativeTrace,
+ formationsForBattleResult,
+ parseBattleExamples,
+ parseBattleSnapshot,
+ type BattleExample,
+ type BattleOfficerSnapshot,
+ type BattleSide,
+ type BattleSnapshot,
+ type StatValues,
+ type TroopChange,
+ type TroopPoint,
+} from '../battleLog/battleLogView';
 import {loadCanonicalOfficerStatsCatalog} from '../services/canonicalOfficerStatsCatalog';
 import {Button} from './ui/button';
 
 type Props={log:BattleResult;formations:readonly Formation[];onClose:()=>void};
 const statLabels:[keyof StatValues,string][]=[['force','武勇'],['intel','知略'],['lead','統率'],['speed','速度']];
-const number=(value:number|null)=>value===null?'未確認':Number.isInteger(value)?String(value):value.toFixed(1);
+const number=(value:number|null|undefined)=>value===null||value===undefined?'未確認':Number.isInteger(value)?String(value):value.toFixed(1);
+const troops=(value:number)=>Math.round(value).toLocaleString('ja-JP');
+
+function SideBadge({side}:{side:BattleSide}){
+ return <span className={`rounded px-2 py-1 text-xs font-bold ${side==='A'?'bg-cyan-950 text-cyan-300':'bg-fuchsia-950 text-fuchsia-300'}`}>{side}</span>;
+}
 
 function OfficerCard({officer}:{officer:BattleOfficerSnapshot}){
  return <article className="rounded-xl border border-slate-700 bg-slate-950 p-3" aria-label={`${officer.side} ${officer.name} ステータス`}>
-  <div className="flex items-start justify-between gap-2"><div><p className="text-xs text-slate-500">{officer.role}・{officer.limitBreak}凸</p><h6 className="font-bold">{officer.name}</h6></div><span className={`rounded px-2 py-1 text-xs font-bold ${officer.side==='A'?'bg-cyan-950 text-cyan-300':'bg-fuchsia-950 text-fuchsia-300'}`}>{officer.side}</span></div>
-  <div className="mt-3 grid grid-cols-2 gap-2">{statLabels.map(([key,label])=><div key={key} className="rounded-lg bg-slate-900 p-2"><p className="text-[10px] text-slate-500">{label}</p><p className="text-lg font-black text-amber-300">{number(officer.allocated[key])}</p><p className="text-[10px] text-slate-500">基礎 {number(officer.base[key])}</p></div>)}</div>
-  <div className="mt-3 space-y-1 text-xs text-slate-400"><p>行動順用速度：<strong className="text-slate-200">{number(officer.actionOrderSpeed)}</strong></p><p>配分pt：{officer.allocationPoints??'未確認'}・兵力：{officer.troops.toLocaleString('ja-JP')}</p><p>固有：{officer.inherentSkill}</p><p>装着1：{officer.equippedSkills[0]}</p><p>装着2：{officer.equippedSkills[1]}</p></div>
+  <div className="flex items-start justify-between gap-2">
+   <div><p className="text-xs text-slate-500">{officer.role}・{officer.limitBreak}凸</p><h6 className="font-bold">{officer.name}</h6></div>
+   <SideBadge side={officer.side}/>
+  </div>
+  <div className="mt-3 grid grid-cols-2 gap-2">
+   {statLabels.map(([key,label])=><div key={key} className="rounded-lg bg-slate-900 p-2"><p className="text-[10px] text-slate-500">{label}</p><p className="text-lg font-black text-amber-300">{number(officer.allocated[key])}</p><p className="text-[10px] text-slate-500">基礎 {number(officer.base[key])}</p></div>)}
+  </div>
+  <div className="mt-3 space-y-1 text-xs text-slate-400">
+   <p>行動順用速度：<strong className="text-slate-200">{number(officer.actionOrderSpeed)}</strong></p>
+   <p>配分pt：{officer.allocationPoints??'未確認'}・兵力：{officer.troops.toLocaleString('ja-JP')}</p>
+   <p>固有：{officer.inherentSkill}</p><p>装着1：{officer.equippedSkills[0]}</p><p>装着2：{officer.equippedSkills[1]}</p>
+  </div>
  </article>;
 }
 
 function StatusSide({side,snapshot}:{side:BattleSide;snapshot:BattleSnapshot}){
- const value=snapshot.sides[side];return <section className="space-y-2"><div className="flex items-center justify-between"><h5 className="font-bold">編成{side}：{value.formationName}</h5><span className="text-xs text-slate-400">{value.troopType} Lv{value.troopLevel}</span></div><div className="grid gap-2 md:grid-cols-3">{value.officers.map(officer=><OfficerCard key={`${side}-${officer.slot}`} officer={officer}/>)}</div></section>;
+ const value=snapshot.sides[side];
+ return <section className="space-y-2">
+  <div className="flex items-center justify-between"><h5 className="font-bold">編成{side}：{value.formationName}</h5><span className="text-xs text-slate-400">{value.troopType} Lv{value.troopLevel}</span></div>
+  <div className="grid gap-2 md:grid-cols-3">{value.officers.map(officer=><OfficerCard key={`${side}-${officer.slot}`} officer={officer}/>)}</div>
+ </section>;
+}
+
+function TroopBoard({points,label}:{points:TroopPoint[];label:string}){
+ return <div>
+  <p className="mb-1 text-[10px] font-bold text-slate-500">{label}</p>
+  <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+   {points.map(point=><div key={`${point.side}-${point.officer}`} className="flex items-center justify-between rounded bg-slate-900 px-2 py-1 text-xs"><span className="truncate"><strong>{point.side}</strong> {point.officer}</span><span>{troops(point.troops)}</span></div>)}
+  </div>
+ </div>;
+}
+
+function ChangeRows({changes,empty=false}:{changes:TroopChange[];empty?:boolean}){
+ if(!changes.length)return empty?<p className="text-xs text-slate-500">兵数変化なし</p>:null;
+ return <ul className="space-y-1">
+  {changes.map((change,index)=><li key={`${change.side}-${change.officer}-${index}`} className={`rounded px-2 py-1 text-xs ${change.kind==='reserve'?'bg-indigo-950 text-indigo-300':change.delta>0?'bg-emerald-950 text-emerald-300':'bg-red-950 text-red-300'}`}>
+   <strong>{change.side} {change.officer}</strong>：{change.kind==='reserve'?`備兵 ${change.delta>0?'+':''}${troops(change.delta)}`:`${troops(change.before)} → ${troops(change.after)}（${change.delta>0?'+':''}${troops(change.delta)}）`}
+   <span className="ml-1 text-[10px] opacity-75">{change.source}</span>
+  </li>)}
+ </ul>;
+}
+
+function ExampleView({example}:{example:BattleExample}){
+ return <section className="space-y-3" aria-label={`${example.outcome==='win'?'勝ち':'負け'}戦闘例`}>
+  <p className="rounded-lg bg-slate-950 p-3 text-xs text-slate-400">seed {example.seed}・{example.direction==='forward'?'順方向':'逆方向'}・勝者 {example.winner}・{example.winReason}・HP差 {number(example.hpDiff)}・終了T{example.endedTurn}</p>
+  {example.error&&<p role="alert" className="rounded-lg bg-red-950 p-3 text-sm text-red-300">詳細例の再走に失敗しました：{example.error}</p>}
+  <div className="space-y-2">
+   {example.turns.map(turn=><details key={turn.turn} className="rounded-xl border border-slate-700 bg-slate-950 p-3" open={turn.turn===1}>
+    <summary className="flex cursor-pointer items-center justify-between font-bold text-amber-300"><span>T{turn.turn}</span><span className="text-xs font-normal text-slate-500">{turn.status==='battle_ended'?'戦闘終了後・行動なし':`${turn.actions.length}武将が行動`}</span></summary>
+    <div className="mt-3 space-y-3">
+     <TroopBoard points={turn.startTroops} label="ターン開始兵数"/>
+     {turn.status==='battle_ended'?<p className="rounded-lg bg-slate-900 p-3 text-sm text-slate-400">この戦闘はT{example.endedTurn}で終了済みです。T{turn.turn}の行動はありません。</p>:<>
+      {(turn.turnStartEvents??[]).length>0&&<div><p className="mb-1 text-xs font-bold text-sky-300">ターン開始時の行動・効果</p><ul className="space-y-1 text-xs text-slate-400">{turn.turnStartEvents.map((event,index)=><li key={index}>・{event}</li>)}</ul></div>}
+      {turn.turnStartChanges.length>0&&<div><p className="mb-1 text-xs font-bold text-sky-300">ターン開始時の兵数増減</p><ChangeRows changes={turn.turnStartChanges}/></div>}
+      <ol className="space-y-2">
+       {turn.actions.map(action=><li key={`${turn.turn}-${action.rank}-${action.side}-${action.officer}`} className="rounded-xl bg-slate-900 p-3">
+        <div className="flex items-center gap-2"><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-amber-500 font-black text-slate-950">{action.rank}</span><SideBadge side={action.side}/><div><p className="font-bold">{action.officer}<span className="ml-2 text-xs font-normal text-slate-500">{action.role}</span></p><p className="text-xs text-slate-400">実効速度 {number(action.effectiveSpeed)}・基礎 {number(action.baseSpeed)}</p></div></div>
+        <div className="mt-2"><p className="mb-1 text-xs font-bold text-slate-300">行動内容</p><ul className="space-y-1 text-xs text-slate-400">{action.events.map((event,index)=><li key={index}>・{event}</li>)}</ul></div>
+        <div className="mt-2"><p className="mb-1 text-xs font-bold text-slate-300">兵数増減</p><ChangeRows changes={action.troopChanges} empty/></div>
+       </li>)}
+      </ol>
+      {turn.turnEndChanges.length>0&&<div><p className="mb-1 text-xs font-bold text-violet-300">ターン終了処理・runtime実値調整</p><ChangeRows changes={turn.turnEndChanges}/></div>}
+     </>}
+     <TroopBoard points={turn.endTroops} label="ターン終了兵数"/>
+    </div>
+   </details>)}
+  </div>
+ </section>;
+}
+
+function LegacyActionOrder({payload,snapshot}:{payload:Record<string,unknown>;snapshot:BattleSnapshot|undefined}){
+ const [direction,setDirection]=useState<'forward'|'reverse'>('forward');
+ const trace=useMemo(()=>{
+  const runtime=extractRepresentativeTrace(payload,direction);
+  if(runtime)return enrichTraceRoles(runtime,snapshot);
+  return snapshot?buildInitialActionOrderTrace(snapshot,direction):undefined;
+ },[direction,payload,snapshot]);
+ return <section aria-label="6武将 行動順" className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
+  <div><h5 className="flex items-center font-bold"><Activity className="mr-2 size-5 text-emerald-300"/>6武将 行動順</h5><p className="mt-1 text-xs text-slate-400">旧ログのため行動内容・兵数増減例はありません。行動順のみ表示します。</p></div>
+  <div className="grid grid-cols-2 gap-2"><Button variant={direction==='forward'?'default':'secondary'} onClick={()=>setDirection('forward')}>順方向 A左／B右</Button><Button variant={direction==='reverse'?'default':'secondary'} onClick={()=>setDirection('reverse')}>逆方向 B左／A右</Button></div>
+  {trace?<div className="space-y-3">{trace.turns.map(turn=><section key={turn.turn} className="rounded-xl bg-slate-950 p-3"><h6 className="mb-2 font-bold text-amber-300">T{turn.turn} 行動順（{turn.entries.length}名）</h6><ol className="space-y-2">{turn.entries.map(entry=><li key={`${turn.turn}-${entry.rank}-${entry.side}-${entry.officer}`} className="flex items-center gap-3 rounded-lg bg-slate-900 p-2"><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-amber-500 font-black text-slate-950">{entry.rank}</span><SideBadge side={entry.side}/><div><p className="font-bold">{entry.officer} <span className="text-xs font-normal text-slate-500">{entry.role}</span></p><p className="text-xs text-slate-400">実効速度 {number(entry.effectiveSpeed)}・基礎 {number(entry.baseSpeed)}</p></div></li>)}</ol></section>)}</div>:<p className="text-red-300">行動順を確認できませんでした。</p>}
+ </section>;
 }
 
 export function BattleLogDetail({log,formations,onClose}:Props){
- const payload=log.payload;const stored=useMemo(()=>parseBattleSnapshot(payload),[payload]);
- const [snapshot,setSnapshot]=useState<BattleSnapshot|undefined>(stored);const [fallback,setFallback]=useState(false);const [statusError,setStatusError]=useState('');const [direction,setDirection]=useState<'forward'|'reverse'>('forward');
+ const payload=log.payload;
+ const stored=useMemo(()=>parseBattleSnapshot(payload),[payload]);
+ const exampleSet=useMemo(()=>parseBattleExamples(payload),[payload]);
+ const [snapshot,setSnapshot]=useState<BattleSnapshot|undefined>(stored);
+ const [fallback,setFallback]=useState(false);
+ const [statusError,setStatusError]=useState('');
+ const [selectedExample,setSelectedExample]=useState(0);
+
  useEffect(()=>{
-  setSnapshot(stored);setFallback(false);setStatusError('');if(stored)return;
-  const [formationA,formationB]=formationsForBattleResult(log,formations);if(!formationA||!formationB){setStatusError('保存当時の編成スナップショットがなく、現在の登録編成も確認できません。');return;}
-  let active=true;void loadCanonicalOfficerStatsCatalog().then(catalog=>{if(active){setSnapshot(buildBattleSnapshot(formationA,formationB,catalog));setFallback(true);}}).catch(error=>{if(active)setStatusError(error instanceof Error?error.message:'武将ステータスを読み込めませんでした');});return()=>{active=false;};
+  setSnapshot(stored);setFallback(false);setStatusError('');
+  if(stored)return;
+  const [formationA,formationB]=formationsForBattleResult(log,formations);
+  if(!formationA||!formationB){setStatusError('保存当時の編成スナップショットがなく、現在の登録編成も確認できません。');return;}
+  let active=true;
+  void loadCanonicalOfficerStatsCatalog().then(catalog=>{if(active){setSnapshot(buildBattleSnapshot(formationA,formationB,catalog));setFallback(true);}}).catch(error=>{if(active)setStatusError(error instanceof Error?error.message:'武将ステータスを読み込めませんでした');});
+  return()=>{active=false;};
  },[formations,log,stored]);
- const trace=useMemo(()=>{const runtime=extractRepresentativeTrace(payload,direction);if(runtime)return enrichTraceRoles(runtime,snapshot);return snapshot?buildInitialActionOrderTrace(snapshot,direction):undefined;},[direction,payload,snapshot]);
+
+ const examples=useMemo(()=>exampleSet?.examples.map(example=>enrichExampleRoles(example,snapshot))??[],[exampleSet,snapshot]);
+ useEffect(()=>{setSelectedExample(0);},[payload]);
  const names=snapshot?`${snapshot.sides.A.formationName} vs ${snapshot.sides.B.formationName}`:'編成A vs 編成B';
+
  return <section aria-label="Battle Log詳細" className="space-y-4 rounded-2xl border border-amber-700 bg-slate-950 p-4">
   <div className="flex items-start justify-between gap-3"><div><h4 className="font-bold">Battle Log詳細</h4><p className="mt-1 text-sm text-slate-400">{names}</p></div><Button variant="secondary" onClick={onClose}>閉じる</Button></div>
 
-  <section aria-label="6武将ステータス" className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3"><h5 className="flex items-center font-bold"><Gauge className="mr-2 size-5 text-amber-300"/>6武将ステータス</h5>{fallback&&<p className="rounded-lg bg-amber-950 p-2 text-xs text-amber-300">この過去ログには保存時スナップショットがないため、現在の登録編成から表示しています。</p>}{statusError&&<p role="alert" className="rounded-lg bg-red-950 p-2 text-xs text-red-300">{statusError}</p>}{snapshot&&<><StatusSide side="A" snapshot={snapshot}/><StatusSide side="B" snapshot={snapshot}/></>}</section>
-
-  <section aria-label="6武将 行動順" className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3"><div><h5 className="flex items-center font-bold"><Activity className="mr-2 size-5 text-emerald-300"/>6武将 行動順</h5><p className="mt-1 text-xs text-slate-400">詳細traceがある場合は各ターンの実効速度順、取得できない場合は保存時の行動順用速度による戦闘開始時6武将順を表示します。</p></div>
-   <div className="grid grid-cols-2 gap-2"><Button variant={direction==='forward'?'default':'secondary'} onClick={()=>setDirection('forward')}>順方向 A左／B右</Button><Button variant={direction==='reverse'?'default':'secondary'} onClick={()=>setDirection('reverse')}>逆方向 B左／A右</Button></div>
-   {trace?<>{trace.source==='initial_speed_snapshot'&&<p className="rounded-lg bg-amber-950 p-2 text-xs text-amber-300">代表試行の詳細traceは未取得です。以下は6武将の行動順用速度を横断した戦闘開始時順です。同速時の抽選や戦闘中の速度変化は含みません。</p>}<p className="text-xs text-slate-400">{trace.source==='runtime_trace'?`seed ${trace.seed??'未確認'}・勝者 ${trace.winner??'引分'}・${trace.winReason}・HP差 ${trace.hpDiff??'—'}`:'戦闘開始時速度順'}</p><div className="space-y-3">{trace.turns.map(turn=><section key={turn.turn} className="rounded-xl bg-slate-950 p-3"><h6 className="mb-2 font-bold text-amber-300">T{turn.turn} 行動順（{turn.entries.length}名）</h6><ol className="space-y-2">{turn.entries.map(entry=>{const bonus=entry.timedSpeedBonus+entry.persistentSpeedBonus;return <li key={`${turn.turn}-${entry.rank}-${entry.side}-${entry.officer}`} className="flex items-center gap-3 rounded-lg bg-slate-900 p-2"><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-amber-500 font-black text-slate-950">{entry.rank}</span><span className={`rounded px-2 py-1 text-xs font-bold ${entry.side==='A'?'bg-cyan-950 text-cyan-300':'bg-fuchsia-950 text-fuchsia-300'}`}>{entry.side}</span><div className="min-w-0 flex-1"><p className="truncate font-bold">{entry.officer}<span className="ml-2 text-xs font-normal text-slate-500">{entry.role}</span></p><p className="text-xs text-slate-400">実効速度 {number(entry.effectiveSpeed)}・基礎 {number(entry.baseSpeed)}{bonus!==0?`・速度補正 ${bonus>0?'+':''}${bonus.toFixed(1)}`:''}</p></div></li>;})}</ol></section>)}</div></>:<p className="rounded-lg bg-red-950 p-3 text-sm text-red-300">行動順を表示するための6武将スナップショットを確認できませんでした。</p>}
+  <section aria-label="100戦勝率" className="rounded-xl border border-amber-700 bg-slate-900 p-4">
+   <div className="flex items-center gap-2"><Swords className="size-5 text-amber-300"/><h5 className="font-bold">100戦勝率</h5></div>
+   <p className="mt-2 text-4xl font-black text-amber-400">{(log.winRate*100).toFixed(1)}%</p>
+   {exampleSet?<>
+    <p className="mt-1 text-xs text-slate-400">合計{exampleSet.completedTrials}戦（正逆{exampleSet.trialsPerDirection}戦ずつ）</p>
+    <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded bg-emerald-950 p-2 text-emerald-300">勝ち<br/><strong className="text-lg">{exampleSet.candidateWins}</strong></div><div className="rounded bg-red-950 p-2 text-red-300">負け<br/><strong className="text-lg">{exampleSet.candidateLosses}</strong></div><div className="rounded bg-slate-800 p-2 text-slate-300">引分<br/><strong className="text-lg">{exampleSet.draws}</strong></div></div>
+   </>:<p className="mt-2 text-xs text-amber-300">旧ログのため100戦内訳は保存されていません。</p>}
   </section>
+
+  <section aria-label="6武将ステータス" className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
+   <h5 className="flex items-center font-bold"><Gauge className="mr-2 size-5 text-amber-300"/>6武将ステータス</h5>
+   {fallback&&<p className="rounded-lg bg-amber-950 p-2 text-xs text-amber-300">この過去ログには保存時スナップショットがないため、現在の登録編成から表示しています。</p>}
+   {statusError&&<p role="alert" className="rounded-lg bg-red-950 p-2 text-xs text-red-300">{statusError}</p>}
+   {snapshot&&<><StatusSide side="A" snapshot={snapshot}/><StatusSide side="B" snapshot={snapshot}/></>}
+  </section>
+
+  {examples.length>0?<section aria-label="勝敗別戦闘例" className="space-y-3 rounded-xl border border-emerald-800 bg-slate-900 p-3">
+   <div><h5 className="flex items-center font-bold"><Users className="mr-2 size-5 text-emerald-300"/>勝敗別戦闘例</h5><p className="mt-1 text-xs text-slate-400">勝ち・負けを各1例表示します。勝率100%または0%では存在する結果側だけ1例表示します。各例はT1〜T8まで確認できます。</p></div>
+   <div className="grid grid-cols-2 gap-2">{examples.map((example,index)=>{const sameBefore=examples.slice(0,index).filter(value=>value.outcome===example.outcome).length;return <Button key={`${example.outcome}-${example.seed}`} variant={selectedExample===index?'default':'secondary'} onClick={()=>setSelectedExample(index)}>{example.outcome==='win'?'勝ち':'負け'}例{sameBefore+1}</Button>;})}</div>
+   {examples[selectedExample]&&<ExampleView example={examples[selectedExample]}/>} 
+  </section>:<LegacyActionOrder payload={payload} snapshot={snapshot}/>} 
 
   <details className="rounded-xl border border-slate-700 bg-slate-900 p-3"><summary className="flex cursor-pointer items-center font-bold"><ChevronDown className="mr-2 size-4"/>生データを確認</summary><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs text-slate-300">{JSON.stringify(toPublicRuntimePayload(payload),null,2)}</pre></details>
  </section>;

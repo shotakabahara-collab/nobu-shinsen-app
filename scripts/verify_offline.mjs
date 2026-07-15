@@ -2,9 +2,10 @@ import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 
-const required=['pyodide/pyodide.js','pyodide/pyodide.asm.js','pyodide/pyodide.asm.wasm','pyodide/pyodide-lock.json','pyodide/python_stdlib.zip','runtime-worker.js','runtime_bundle_b223.tgz','canonical_officer_catalog.json','canonical_officer_stats_catalog.json','canonical_skill_catalog.json','manifest.webmanifest','apple-touch-icon.png','icon-192.png','icon-512.png'];
+const required=['pyodide/pyodide.js','pyodide/pyodide.asm.js','pyodide/pyodide.asm.wasm','pyodide/pyodide-lock.json','pyodide/python_stdlib.zip','runtime-worker.js','battle-example-api.py','runtime_bundle_b223.tgz','canonical_officer_catalog.json','canonical_officer_stats_catalog.json','canonical_skill_catalog.json','manifest.webmanifest','apple-touch-icon.png','icon-192.png','icon-512.png'];
 const sw=await readFile(join('dist','sw.js'),'utf8');
 const worker=await readFile(join('dist','runtime-worker.js'),'utf8');
+const exampleApi=await readFile(join('dist','battle-example-api.py'),'utf8');
 const manifest=JSON.parse(await readFile(join('dist','manifest.webmanifest'),'utf8'));
 const lock=JSON.parse(await readFile(join('canonical','LOCK.json'),'utf8'));
 const bundle=await readFile(join('dist','runtime_bundle_b223.tgz'));
@@ -15,6 +16,7 @@ const bundleSha=createHash('sha256').update(bundle).digest('hex');
 
 for(const asset of required)if(!sw.includes(asset))throw new Error(`offline precache missing: ${asset}`);
 if(/https?:\/\//.test(worker))throw new Error('runtime worker still contains an external URL');
+if(!worker.includes('build_battle_examples')||!exampleApi.includes('def build_battle_examples'))throw new Error('battle example runtime bridge is missing');
 if(bundleSha!==lock.runtimeBundleSha256)throw new Error(`runtime bundle SHA mismatch: ${bundleSha}`);
 if(officerCatalog.canonicalVersion!==lock.canonicalVersion||officerCatalog.canonicalArchiveSha256!==lock.archiveSha256)throw new Error('canonical officer catalog release lock mismatch');
 if(!Array.isArray(officerCatalog.officers)||officerCatalog.officerCount!==officerCatalog.officers.length)throw new Error('canonical officer catalog is malformed');
