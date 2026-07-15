@@ -59,7 +59,7 @@ function binaryVariant(source:HTMLCanvasElement):HTMLCanvasElement|undefined{
  const canvas=document.createElement('canvas');canvas.width=source.width;canvas.height=source.height;
  const context=canvas.getContext('2d',{alpha:false});if(!context)return undefined;
  context.drawImage(source,0,0);const pixels=context.getImageData(0,0,canvas.width,canvas.height),histogram=Array.from({length:256},()=>0);
- for(let index=0;index<pixels.data.length;index+=4){const luminance=Math.round((pixels.data[index]??0)*.299+(pixels.data[index+1]??0)*.587+(pixels.data[index+2]??0)*.114);histogram[luminance]++;}
+ for(let index=0;index<pixels.data.length;index+=4){const luminance=Math.round((pixels.data[index]??0)*.299+(pixels.data[index+1]??0)*.587+(pixels.data[index+2]??0)*.114);histogram[luminance]=(histogram[luminance]??0)+1;}
  const threshold=Math.max(80,Math.min(215,otsuThreshold(histogram,canvas.width*canvas.height)+6));
  for(let index=0;index<pixels.data.length;index+=4){const luminance=(pixels.data[index]??0)*.299+(pixels.data[index+1]??0)*.587+(pixels.data[index+2]??0)*.114,value=luminance<threshold?0:255;pixels.data[index]=pixels.data[index+1]=pixels.data[index+2]=value;pixels.data[index+3]=255;}
  context.putImageData(pixels,0,0);return canvas;
