@@ -26,57 +26,36 @@ class RuntimeIntegrityTest(unittest.TestCase):
    self.assertIn('02_ENGINE/browser_runtime_api.py',names)
 
  def test_generated_officer_catalog_matches_canonical_db(self):
-  catalog_bytes=(ROOT/'public/canonical_officer_catalog.json').read_bytes()
-  catalog=json.loads(catalog_bytes)
-  self.assertEqual(catalog['schemaVersion'],1)
-  self.assertEqual(catalog['canonicalVersion'],LOCK['canonicalVersion'])
-  self.assertEqual(catalog['canonicalArchiveSha256'],LOCK['archiveSha256'])
-  self.assertEqual(catalog['unitLevelRule'],{'baseLevel':5,'defaultCap':10,'capUnlockMode':'unbounded'})
-  self.assertEqual(catalog['officerCount'],len(catalog['officers']))
-  names=[row['name'] for row in catalog['officers']]
-  self.assertEqual(len(names),len(set(names)))
-  by_name={row['name']:row for row in catalog['officers']}
-  self.assertEqual(by_name['松永久秀']['inherentSkill'],'梟雄の計')
-  self.assertEqual(by_name['鈴木佐大夫']['inherentSkill'],'弾嵐雨霞')
-  self.assertEqual(by_name['蜂須賀家政']['inherentSkill'],'未確認')
+  catalog_bytes=(ROOT/'public/canonical_officer_catalog.json').read_bytes();catalog=json.loads(catalog_bytes)
+  self.assertEqual(catalog['schemaVersion'],1);self.assertEqual(catalog['canonicalVersion'],LOCK['canonicalVersion']);self.assertEqual(catalog['canonicalArchiveSha256'],LOCK['archiveSha256'])
+  self.assertEqual(catalog['unitLevelRule'],{'baseLevel':5,'defaultCap':10,'capUnlockMode':'unbounded'});self.assertEqual(catalog['officerCount'],len(catalog['officers']))
+  names=[row['name'] for row in catalog['officers']];self.assertEqual(len(names),len(set(names)));by_name={row['name']:row for row in catalog['officers']}
+  self.assertEqual(by_name['松永久秀']['inherentSkill'],'梟雄の計');self.assertEqual(by_name['鈴木佐大夫']['inherentSkill'],'弾嵐雨霞');self.assertEqual(by_name['蜂須賀家政']['inherentSkill'],'未確認')
   self.assertNotIn('有備無患',{row['inherentSkill'] for row in catalog['officers']})
-  self.assertIn({
-   'officerName':'蜂須賀家政',
-   'rejectedInherentSkill':'有備無患',
-   'replacement':'未確認',
-   'reason':'ユーザー確定情報：有備無患は固有戦法ではなく装着戦法',
-  },catalog['corrections'])
+  self.assertIn({'officerName':'蜂須賀家政','rejectedInherentSkill':'有備無患','replacement':'未確認','reason':'ユーザー確定情報：有備無患は固有戦法ではなく装着戦法'},catalog['corrections'])
   self.assertIn({'name':'砲術Ⅲ','unlockedAt':3,'unitTypes':['鉄砲'],'levelBonus':3,'capUnlock':False,'capBonus':0},by_name['松永久秀']['unitLevelTraits'])
   self.assertIn({'name':'騎兵大将','unlockedAt':0,'unitTypes':['騎馬'],'levelBonus':3,'capUnlock':True,'capBonus':1},by_name['柿崎景家']['unitLevelTraits'])
 
+ def test_generated_officer_stat_catalog_matches_resolved_runtime_rows(self):
+  catalog=json.loads((ROOT/'public/canonical_officer_stats_catalog.json').read_text())
+  self.assertEqual(catalog['schemaVersion'],1);self.assertEqual(catalog['canonicalVersion'],LOCK['canonicalVersion']);self.assertEqual(catalog['canonicalArchiveSha256'],LOCK['archiveSha256'])
+  self.assertEqual(catalog['recordCount'],len(catalog['records']));keys=[(row['name'],row['awaken']) for row in catalog['records']];self.assertEqual(len(keys),len(set(keys)))
+  by_key={(row['name'],row['awaken']):row for row in catalog['records']}
+  self.assertEqual(by_key[('山本勘助',2)]['allocated'],{'force':103.0,'intel':244.0,'lead':155.0,'speed':117.0})
+  self.assertEqual(by_key[('山本勘助',2)]['actionOrderSpeed'],117.0)
+  self.assertEqual(by_key[('柴田勝家',1)]['allocated']['force'],218.0);self.assertEqual(by_key[('柴田勝家',1)]['allocated']['speed'],167.0)
+  self.assertEqual(by_key[('柿崎景家',2)]['allocated']['force'],242.0);self.assertEqual(by_key[('柿崎景家',2)]['inherentSkill'],'越後二天')
+
  def test_generated_skill_catalog_matches_canonical_db(self):
-  catalog_bytes=(ROOT/'public/canonical_skill_catalog.json').read_bytes()
-  catalog=json.loads(catalog_bytes)
-  self.assertEqual(catalog['schemaVersion'],1)
-  self.assertEqual(catalog['canonicalVersion'],LOCK['canonicalVersion'])
-  self.assertEqual(catalog['canonicalArchiveSha256'],LOCK['archiveSha256'])
-  self.assertEqual(catalog['skillCount'],len(catalog['skills']))
-  names=[row['name'] for row in catalog['skills']]
-  self.assertEqual(len(names),len(set(names)))
-  by_name={row['name']:row for row in catalog['skills']}
-  self.assertTrue(by_name['紅蓮の炎']['attachable'])
-  self.assertFalse(by_name['梟雄の計']['attachable'])
-  self.assertEqual(by_name['有備無患']['type'],'能動')
-  self.assertTrue(by_name['有備無患']['attachable'])
-  self.assertTrue(all(isinstance(row.get('unitLevelEffects'),list) for row in catalog['skills']))
-  self.assertEqual(by_name['紅蓮の炎']['unitLevelEffects'],[])
+  catalog_bytes=(ROOT/'public/canonical_skill_catalog.json').read_bytes();catalog=json.loads(catalog_bytes)
+  self.assertEqual(catalog['schemaVersion'],1);self.assertEqual(catalog['canonicalVersion'],LOCK['canonicalVersion']);self.assertEqual(catalog['canonicalArchiveSha256'],LOCK['archiveSha256']);self.assertEqual(catalog['skillCount'],len(catalog['skills']))
+  names=[row['name'] for row in catalog['skills']];self.assertEqual(len(names),len(set(names)));by_name={row['name']:row for row in catalog['skills']}
+  self.assertTrue(by_name['紅蓮の炎']['attachable']);self.assertFalse(by_name['梟雄の計']['attachable']);self.assertEqual(by_name['有備無患']['type'],'能動');self.assertTrue(by_name['有備無患']['attachable'])
+  self.assertTrue(all(isinstance(row.get('unitLevelEffects'),list) for row in catalog['skills']));self.assertEqual(by_name['紅蓮の炎']['unitLevelEffects'],[])
 
  def test_bundle_manifest_matches_release_lock(self):
-  manifest=json.loads((ROOT/'public/runtime_bundle_b223.manifest.json').read_text())
-  officer_bytes=(ROOT/'public/canonical_officer_catalog.json').read_bytes()
-  skill_bytes=(ROOT/'public/canonical_skill_catalog.json').read_bytes()
-  self.assertEqual(manifest['canonicalArchiveSha256'],LOCK['archiveSha256'])
-  self.assertEqual(manifest['battleRuntimeSha256'],LOCK['battleRuntimeSha256'])
-  self.assertEqual(manifest['bundleSha256'],LOCK['runtimeBundleSha256'])
-  self.assertEqual(manifest['duplicateMemberCount'],0)
-  self.assertEqual(manifest['officerCatalogSha256'],sha_bytes(officer_bytes))
-  self.assertEqual(manifest['officerCatalogCount'],json.loads(officer_bytes)['officerCount'])
-  self.assertEqual(manifest['skillCatalogSha256'],sha_bytes(skill_bytes))
-  self.assertEqual(manifest['skillCatalogCount'],json.loads(skill_bytes)['skillCount'])
+  manifest=json.loads((ROOT/'public/runtime_bundle_b223.manifest.json').read_text());officer_bytes=(ROOT/'public/canonical_officer_catalog.json').read_bytes();skill_bytes=(ROOT/'public/canonical_skill_catalog.json').read_bytes()
+  self.assertEqual(manifest['canonicalArchiveSha256'],LOCK['archiveSha256']);self.assertEqual(manifest['battleRuntimeSha256'],LOCK['battleRuntimeSha256']);self.assertEqual(manifest['bundleSha256'],LOCK['runtimeBundleSha256']);self.assertEqual(manifest['duplicateMemberCount'],0)
+  self.assertEqual(manifest['officerCatalogSha256'],sha_bytes(officer_bytes));self.assertEqual(manifest['officerCatalogCount'],json.loads(officer_bytes)['officerCount']);self.assertEqual(manifest['skillCatalogSha256'],sha_bytes(skill_bytes));self.assertEqual(manifest['skillCatalogCount'],json.loads(skill_bytes)['skillCount'])
 
 if __name__=='__main__':unittest.main()
