@@ -32,19 +32,16 @@ test('runs the real canonical 100-battle flow in an iPhone WebKit environment',a
  expect(await page.evaluate(()=>navigator.userAgent)).toContain('AppleWebKit');
  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute('content','yes');
  await expect(page.getByText('iPhoneホーム画面に追加')).toBeVisible();
-
  await page.getByRole('button',{name:'データ'}).click();
  await page.locator('input[type="file"]').setInputFiles({name:'webkit-canonical-e2e.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
  await expect(page.getByText('バックアップを復元しました（編成2件）',{exact:true})).toBeVisible();
-
  await page.getByRole('button',{name:'対戦・提案'}).click();
  await page.getByLabel('編成A').selectOption(backup.formations[0].id);
  await page.getByLabel('編成B').selectOption(backup.formations[1].id);
  await page.getByRole('button',{name:'100戦で対戦'}).click();
  await expect(page.getByText('山本騎馬と黒田弓の100戦計算が完了しました',{exact:true})).toBeVisible({timeout:540_000});
  await expect(page.getByText('山本騎馬の勝率')).toBeVisible();
- await expect(page.getByText(/合計 100戦（正逆50戦ずつ）/)).toBeVisible();
+ await expect(page.getByText(/合計 100戦（正逆50戦ずつ）・HP差/).first()).toBeVisible();
  await expect(page.getByText('正本準拠エンジンで計算済み',{exact:true})).toBeVisible();
  await expect(page.locator('body')).not.toContainText(/b223/i);
- await expect(page.getByText(/HP差 /)).toBeVisible();
 });
