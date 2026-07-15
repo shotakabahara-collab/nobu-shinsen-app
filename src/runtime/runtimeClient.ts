@@ -1,4 +1,4 @@
-import {calculateRequestSchema,formalRequestSchema,searchRequestSchema,type CalculateRequest,type RuntimeOperation,type RuntimeResult} from './contracts';
+import {battleDetailRequestSchema,calculateRequestSchema,formalRequestSchema,searchRequestSchema,type BattleDetailRequest,type CalculateRequest,type RuntimeOperation,type RuntimeResult} from './contracts';
 import {classifyRuntimeError} from '../domain/runtimeError';
 import {RUNTIME_ERROR_EVENT,type RuntimeErrorEventDetail} from '../components/RuntimeErrorHost';
 
@@ -44,7 +44,7 @@ export class RuntimeClient{
  }
 
  private run(operation:RuntimeOperation,request:unknown){
-  const schemas={calculate:calculateRequestSchema,search:searchRequestSchema,formal:formalRequestSchema};
+  const schemas={calculate:calculateRequestSchema,search:searchRequestSchema,formal:formalRequestSchema,detail:battleDetailRequestSchema};
   let payload:unknown;
   try{payload=schemas[operation].parse(request);}catch(error){return Promise.reject(notifyRuntimeError(error,()=>{void this.run(operation,request);}));}
   const requestId=crypto.randomUUID();
@@ -57,6 +57,7 @@ export class RuntimeClient{
  }
 
  calculate(request:CalculateRequest){return this.run('calculate',request);}
+ detail(request:BattleDetailRequest){return this.run('detail',request);}
  search(request:unknown){return this.run('search',request);}
  formal(request:unknown){return this.run('formal',request);}
  cancel(){this.failAll(new RuntimeCancelledError());}
