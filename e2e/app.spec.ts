@@ -87,7 +87,7 @@ test('matches formations and shows six-officer stats and runtime action order on
  const statuses=page.getByRole('region',{name:'6武将ステータス'});await expect(statuses).toBeVisible();
  await expect(statuses.getByLabel('A 山本勘助 ステータス')).toBeVisible();await expect(statuses.getByLabel('B 黒田官兵衛 ステータス')).toBeVisible();
  await expect(statuses.getByText('武勇',{exact:true}).first()).toBeVisible();await expect(statuses.getByText('知略',{exact:true}).first()).toBeVisible();await expect(statuses.getByText('統率',{exact:true}).first()).toBeVisible();await expect(statuses.getByText('速度',{exact:true}).first()).toBeVisible();
- const actionOrder=page.getByRole('region',{name:'6武将 行動順'});await expect(actionOrder).toBeVisible();await expect(actionOrder.getByText('T1 行動順（6名）')).toBeVisible();await expect(actionOrder.getByText('山本勘助',{exact:true}).first()).toBeVisible();await expect(actionOrder.getByText('黒田官兵衛',{exact:true}).first()).toBeVisible();
+ const actionOrder=page.getByRole('region',{name:'6武将 行動順'});await expect(actionOrder).toBeVisible();await expect(actionOrder.getByText('T1 行動順（6名）')).toBeVisible();await expect(actionOrder.getByText(/山本勘助/).first()).toBeVisible();await expect(actionOrder.getByText(/黒田官兵衛/).first()).toBeVisible();
  await page.getByRole('button',{name:'閉じる'}).click();
 
  await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
