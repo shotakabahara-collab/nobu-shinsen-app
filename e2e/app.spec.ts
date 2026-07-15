@@ -49,10 +49,10 @@ test('shows 100-run win-loss examples, T1-T8 actions and troop changes online an
  const battleSnapshot={schemaVersion:1,source:'canonical_officer_stats_catalog',sides:{A:{side:'A',formationId:formations[0].id,formationName:'山本騎馬',troopType:'騎馬',troopLevel:10,officers:[snapOfficer('A',0,'山本勘助',150),snapOfficer('A',1,'柴田勝家',140),snapOfficer('A',2,'柿崎景家',130)]},B:{side:'B',formationId:formations[1].id,formationName:'黒田弓',troopType:'弓',troopLevel:10,officers:[snapOfficer('B',0,'黒田官兵衛',145),snapOfficer('B',1,'豊臣秀吉',135),snapOfficer('B',2,'ねね',125)]}}};
  const start=[['A','山本勘助',10000],['A','柴田勝家',10000],['A','柿崎景家',10000],['B','黒田官兵衛',10000],['B','豊臣秀吉',10000],['B','ねね',10000]].map(([side,officer,troops])=>({side,officer,troops}));
  const end=start.map(row=>row.officer==='黒田官兵衛'?{...row,troops:9000}:row);
- const activeTurn={turn:1,status:'active',startTroops:start,endTroops:end,turnStartChanges:[],actions:[{rank:1,side:'A',rawSide:'A',officer:'山本勘助',role:'大将',effectiveSpeed:153,baseSpeed:153,timedSpeedBonus:0,persistentSpeedBonus:0,events:['A:山本勘助 通常攻撃 -> B:黒田官兵衛 1000'],troopChanges:[{side:'B',officer:'黒田官兵衛',before:10000,after:9000,delta:-1000,kind:'troops',source:'通常攻撃'}]}],turnEndChanges:[]};
- const ended=(turn:number)=>({turn,status:'battle_ended',startTroops:end,endTroops:end,turnStartChanges:[],actions:[],turnEndChanges:[]});
+ const activeTurn={turn:1,status:'active',startTroops:start,endTroops:end,turnStartEvents:[],turnStartChanges:[],actions:[{rank:1,side:'A',rawSide:'A',officer:'山本勘助',role:'大将',effectiveSpeed:153,baseSpeed:153,timedSpeedBonus:0,persistentSpeedBonus:0,events:['A:山本勘助 通常攻撃 -> B:黒田官兵衛 1000'],troopChanges:[{side:'B',officer:'黒田官兵衛',before:10000,after:9000,delta:-1000,kind:'troops',source:'通常攻撃'}]}],turnEndChanges:[]};
+ const ended=(turn:number)=>({turn,status:'battle_ended',startTroops:end,endTroops:end,turnStartEvents:[],turnStartChanges:[],actions:[],turnEndChanges:[]});
  const example=(outcome:'win'|'loss',seed:number)=>({outcome,direction:'forward',seed,winner:outcome==='win'?'A':'B',winReason:'commander_kill',endedTurn:1,maxTurns:8,hpDiff:outcome==='win'?1000:-1000,turns:[activeTurn,...[2,3,4,5,6,7,8].map(ended)]});
- const payload={battle_snapshot:battleSnapshot,battle_examples:{schemaVersion:1,trialsPerDirection:100,directions:2,completedTrials:200,candidateWins:120,candidateLosses:80,draws:0,selectionPolicy:'test',examples:[example('win',100),example('win',101),example('loss',200),example('loss',201)]}};
+ const payload={battle_snapshot:battleSnapshot,battle_examples:{schemaVersion:1,trialsPerDirection:100,directions:2,completedTrials:200,candidateWins:120,candidateLosses:80,draws:0,selectionPolicy:'test',examples:[example('win',100),example('loss',200)]}};
  const battleResult={id:'00000000-0000-4000-8000-000000000003',allyId:formations[0].id,enemyId:formations[1].id,createdAt:now,status:'completed',winRate:.6,hpDiff:100,trials:100,blocks:1,runtime:'runtime',payload};
  const backup={schemaVersion:2,exportedAt:now,warriors:[],skills:[],formations,battleResults:[battleResult]};
 
@@ -65,7 +65,8 @@ test('shows 100-run win-loss examples, T1-T8 actions and troop changes online an
  await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('60.0%');
  await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('完了200試行');
  await expect(page.getByRole('region',{name:'勝敗別戦闘例'})).toBeVisible();
- await expect(page.getByRole('button',{name:'勝ち例1'})).toBeVisible();await expect(page.getByRole('button',{name:'勝ち例2'})).toBeVisible();await expect(page.getByRole('button',{name:'負け例1'})).toBeVisible();await expect(page.getByRole('button',{name:'負け例2'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'勝ち例1'})).toBeVisible();await expect(page.getByRole('button',{name:'負け例1'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'勝ち例2'})).toHaveCount(0);await expect(page.getByRole('button',{name:'負け例2'})).toHaveCount(0);
  await expect(page.getByText('T1',{exact:true})).toBeVisible();await expect(page.getByText('T8',{exact:true})).toBeVisible();
  await expect(page.getByText(/通常攻撃 -> B:黒田官兵衛 1000/)).toBeVisible();
  await expect(page.getByText(/10,000 → 9,000/)).toBeVisible();
