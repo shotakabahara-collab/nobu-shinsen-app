@@ -6,7 +6,8 @@ const TESSERACT_SCRIPT='https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tes
 type OcrProgress={status?:string;progress?:number};
 type TesseractWorker={recognize:(image:File|Blob,options?:Record<string,unknown>,output?:Record<string,boolean>)=>Promise<{data:{text:string;confidence?:number}}>;terminate:()=>Promise<void>};
 type TesseractGlobal={OEM:{LSTM_ONLY:number};createWorker:(languages:string,oem:number,options:{logger?:(message:OcrProgress)=>void})=>Promise<TesseractWorker>};
-type PreparedImage={image:File|Blob;slot?:0|1|2;limitBreak?:number;limitBreakConfidence?:'high'|'medium';limitBreakEvidence?:string;layout?:'three-card'};
+type OcrRow='card'|'inherent'|'equipped1'|'equipped2';
+type PreparedImage={image:File|Blob;slot?:0|1|2;row?:OcrRow;limitBreak?:number;limitBreakConfidence?:'high'|'medium';limitBreakEvidence?:string;layout?:'three-card'};
 
 declare global{interface Window{Tesseract?:TesseractGlobal}}
 
@@ -32,13 +33,18 @@ function canvasToBlob(canvas:HTMLCanvasElement,type='image/jpeg',quality=.94):Pr
  return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('画像の前処理に失敗しました')),type,quality));
 }
 
+function renderCrop(bitmap:ImageBitmap,sourceX:number,sourceY:number,sourceWidth:number,sourceHeight:number,scale:number,contrast:number):HTMLCanvasElement|undefined{
+ const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(sourceWidth*scale));canvas.height=Math.max(1,Math.round(sourceHeight*scale));
+ const context=canvas.getContext('2d',{alpha:false});if(!context)return undefined;
+ context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.filter=`grayscale(1) contrast(${contrast})`;
+ context.drawImage(bitmap,sourceX,sourceY,sourceWidth,sourceHeight,0,0,canvas.width,canvas.height);context.filter='none';
+ return canvas;
+}
+
 async function prepareWholeImage(file:File,bitmap:ImageBitmap):Promise<PreparedImage>{
  const maxSide=2400;const ratio=Math.min(1,maxSide/Math.max(bitmap.width,bitmap.height));
  if(ratio===1)return {image:file};
- const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*ratio));canvas.height=Math.max(1,Math.round(bitmap.height*ratio));
- const context=canvas.getContext('2d',{alpha:false});if(!context)return {image:file};
- context.drawImage(bitmap,0,0,canvas.width,canvas.height);
- return {image:await canvasToBlob(canvas)};
+ const canvas=renderCrop(bitmap,0,0,bitmap.width,bitmap.height,ratio,1);return canvas?{image:await canvasToBlob(canvas)}:{image:file};
 }
 
 async function prepareOcrImages(file:File):Promise<PreparedImage[]>{
@@ -47,20 +53,30 @@ async function prepareOcrImages(file:File):Promise<PreparedImage[]>{
   const bitmap=await createImageBitmap(file);
   try{
    if(!looksLikeThreeCardFormation(bitmap.width,bitmap.height))return [await prepareWholeImage(file,bitmap)];
-   const prepared:PreparedImage[]=[];const third=bitmap.width/3;const cropTop=Math.floor(bitmap.height*.47);const cropHeight=bitmap.height-cropTop;
+   const prepared:PreparedImage[]=[];const third=bitmap.width/3;
    for(const slot of [0,1,2] as const){
     const exactX=Math.floor(slot*third);const exactEnd=slot===2?bitmap.width:Math.floor((slot+1)*third);const exactWidth=Math.max(1,exactEnd-exactX);
     const sample=document.createElement('canvas');sample.width=exactWidth;sample.height=bitmap.height;
     const sampleContext=sample.getContext('2d',{alpha:false});let detection:ReturnType<typeof estimateLimitBreakFromPixels>;
     if(sampleContext){sampleContext.drawImage(bitmap,exactX,0,exactWidth,bitmap.height,0,0,exactWidth,bitmap.height);detection=estimateLimitBreakFromPixels(sampleContext.getImageData(0,0,exactWidth,bitmap.height));}
-    const overlap=Math.floor(bitmap.width*.012);const sourceX=Math.max(0,exactX-overlap);const sourceEnd=Math.min(bitmap.width,exactEnd+overlap);const sourceWidth=sourceEnd-sourceX;
-    const scale=Math.min(2.4,900/Math.max(1,sourceWidth));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(sourceWidth*scale));canvas.height=Math.max(1,Math.round(cropHeight*scale));
-    const context=canvas.getContext('2d',{alpha:false});if(!context)continue;
-    context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.filter='grayscale(1) contrast(1.45)';
-    context.drawImage(bitmap,sourceX,cropTop,sourceWidth,cropHeight,0,0,canvas.width,canvas.height);context.filter='none';
-    prepared.push({image:await canvasToBlob(canvas,'image/png'),slot,layout:'three-card',...(detection?{limitBreak:detection.value,limitBreakConfidence:detection.confidence,limitBreakEvidence:detection.evidence}:{})});
+
+    const center=bitmap.width*(2/9+slot*5/18);const cardWidth=Math.min(bitmap.width*.27,bitmap.width);const sourceX=Math.max(0,Math.round(center-cardWidth/2));const sourceEnd=Math.min(bitmap.width,Math.round(center+cardWidth/2));const sourceWidth=Math.max(1,sourceEnd-sourceX);
+    const cardTop=Math.floor(bitmap.height*.47);const cardHeight=bitmap.height-cardTop;const cardScale=Math.min(2.4,900/sourceWidth);
+    const cardCanvas=renderCrop(bitmap,sourceX,cardTop,sourceWidth,cardHeight,cardScale,1.45);
+    if(cardCanvas)prepared.push({image:await canvasToBlob(cardCanvas,'image/png'),slot,row:'card',layout:'three-card',...(detection?{limitBreak:detection.value,limitBreakConfidence:detection.confidence,limitBreakEvidence:detection.evidence}:{})});
+
+    const rows:{row:Exclude<OcrRow,'card'>;start:number;end:number}[]=[
+     {row:'inherent',start:.745,end:.835},
+     {row:'equipped1',start:.835,end:.918},
+     {row:'equipped2',start:.918,end:1},
+    ];
+    for(const row of rows){
+     const y=Math.floor(bitmap.height*row.start);const height=Math.max(1,Math.ceil(bitmap.height*row.end)-y);const scale=Math.min(3.2,1040/sourceWidth);
+     const rowCanvas=renderCrop(bitmap,sourceX,y,sourceWidth,height,scale,1.8);if(!rowCanvas)continue;
+     prepared.push({image:await canvasToBlob(rowCanvas,'image/png'),slot,row:row.row,layout:'three-card'});
+    }
    }
-   return prepared.length===3?prepared:[await prepareWholeImage(file,bitmap)];
+   return prepared.length>=9?prepared:[await prepareWholeImage(file,bitmap)];
   }finally{bitmap.close();}
  }catch{return [{image:file}];}
 }
@@ -80,10 +96,10 @@ export async function recognizeFormationImages(files:readonly File[],onProgress?
  try{
   const pages:OcrPage[]=[];
   for(activeJob=0;activeJob<prepared.length;activeJob++){
-   const item=prepared[activeJob]!;const label=item.slot===undefined?`画像${activeJob+1}/${prepared.length}`:`${item.slot===0?'大将':`副将${item.slot}`}カード`;
-   onProgress?.(`${label}を解析しています`,.08+(activeJob/totalJobs)*.86);
+   const item=prepared[activeJob]!;const role=item.slot===undefined?'画像':item.slot===0?'大将':`副将${item.slot}`;const rowLabel=item.row==='inherent'?'固有戦法':item.row==='equipped1'?'装着戦法1':item.row==='equipped2'?'装着戦法2':'カード全体';
+   onProgress?.(`${role}${item.row?`・${rowLabel}`:''}を解析しています`,.08+(activeJob/totalJobs)*.86);
    const result=await worker.recognize(item.image,{}, {text:true});
-   pages.push({text:result.data.text,confidence:result.data.confidence,...(item.slot===undefined?{}:{slot:item.slot}),...(item.layout?{layout:item.layout}:{}),...(item.limitBreak===undefined?{}:{limitBreak:item.limitBreak,limitBreakConfidence:item.limitBreakConfidence,limitBreakEvidence:item.limitBreakEvidence})});
+   pages.push({text:result.data.text,confidence:result.data.confidence,...(item.slot===undefined?{}:{slot:item.slot}),...(item.row?{row:item.row}:{}),...(item.layout?{layout:item.layout}:{}),...(item.limitBreak===undefined?{}:{limitBreak:item.limitBreak,limitBreakConfidence:item.limitBreakConfidence,limitBreakEvidence:item.limitBreakEvidence})});
   }
   onProgress?.('正本DBと照合しています',1);
   return pages;
