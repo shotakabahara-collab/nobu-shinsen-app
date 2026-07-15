@@ -41,8 +41,9 @@ describe('BattleLogDetail',()=>{
  it('shows 100-run counts, one win and one loss example, T1-T8 actions and troop changes',()=>{
   render(<BattleLogDetail log={detailedLog()} formations={[]} onClose={()=>{}}/>);
   const rate=screen.getByRole('region',{name:'100戦勝率'});expect(rate).toHaveTextContent('60.0%');expect(rate).toHaveTextContent('完了200試行');expect(rate).toHaveTextContent('120');expect(rate).toHaveTextContent('80');
-  expect(screen.getByRole('button',{name:'勝ち例1'})).toBeVisible();expect(screen.getByRole('button',{name:'負け例1'})).toBeVisible();expect(screen.queryByRole('button',{name:'勝ち例2'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'負け例2'})).not.toBeInTheDocument();
-  expect(screen.getByText('T1',{exact:true})).toBeVisible();expect(screen.getByText('T8',{exact:true})).toBeVisible();expect(screen.getByText(/水の如し/)).toBeVisible();expect(screen.getByText(/通常攻撃 -> B:丁 1000/)).toBeVisible();expect(screen.getByText(/10,000 → 9,000/)).toBeVisible();
-  fireEvent.click(screen.getByRole('button',{name:'負け例1'}));expect(screen.getByText(/seed 200/)).toBeVisible();
+  const examples=screen.getByRole('region',{name:'勝敗別戦闘例'});
+  expect(within(examples).getByRole('button',{name:'勝ち例1'})).toBeVisible();expect(within(examples).getByRole('button',{name:'負け例1'})).toBeVisible();expect(within(examples).queryByRole('button',{name:'勝ち例2'})).not.toBeInTheDocument();expect(within(examples).queryByRole('button',{name:'負け例2'})).not.toBeInTheDocument();
+  expect(within(examples).getByText('T1',{exact:true})).toBeVisible();expect(within(examples).getByText('T8',{exact:true})).toBeVisible();expect(within(examples).getByText(/水の如し/)).toBeVisible();expect(within(examples).getByText(/通常攻撃 -> B:丁 1000/)).toBeVisible();expect(within(examples).getByText(/10,000 → 9,000/)).toBeVisible();
+  fireEvent.click(within(examples).getByRole('button',{name:'負け例1'}));expect(within(examples).getByText(/seed 200/)).toBeVisible();
  });
 });
