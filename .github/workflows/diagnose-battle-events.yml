@@ -1,7 +1,7 @@
 name: Diagnose Battle Events
 on:
-  push:
-    branches: [agent/battle-log-turn-actions-100x1]
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
 jobs:
