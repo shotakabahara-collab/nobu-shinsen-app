@@ -8,7 +8,8 @@
 - 武将・所有戦法の管理、IndexedDB永続化、全データのJSON Import / Export
 - b223の `calculate` / `search` / `formal` 境界、実勝率・計算状態・エラー表示
 - Battle Log保存・詳細表示、所有データを使う予算制限付き探索、30×3正式再評価
-- 順方向50戦＋逆方向50戦の100戦評価を10戦ずつ分割し、各バッチ後にPyodide workerを再生成するiPhone向けメモリ保護
+- 順方向50戦＋逆方向50戦の100戦評価を10戦ずつ分割し、1つのPyodide workerへ逐次送信するiPhone向けメモリ保護（失敗バッチのみ再起動・再試行）
+- T1〜T8詳細traceは表示に必要な情報だけを実行中に収集し、SafariでもPython例外本文・停止段階・seedを保持
 - 勝ち例／負け例のT1〜T8行動内容、対象、行動前後の兵数増減表示
 - iPhoneセーフエリア・ホーム画面用アイコン・standalone表示・オフラインキャッシュ
 - 固定SHAのcanonical archive・battle runtime・runtime bundleを用いた改変検知

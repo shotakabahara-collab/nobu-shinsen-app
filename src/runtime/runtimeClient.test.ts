@@ -14,6 +14,7 @@ class WorkerMock{
  terminate=vi.fn();
  constructor(){WorkerMock.instances.push(this);}
  result(message:WorkerMessage,result:RuntimeResult){queueMicrotask(()=>this.onmessage?.({data:{type:'result',requestId:message.requestId,result}} as MessageEvent));}
+ runtimeError(message:WorkerMessage,detail:string){queueMicrotask(()=>this.onmessage?.({data:{type:'error',requestId:message.requestId,message:detail}} as MessageEvent));}
  fail(message:string){queueMicrotask(()=>this.onerror?.(new ErrorEvent('error',{message})));}
 }
 
@@ -30,7 +31,7 @@ function batchResult(message:WorkerMessage):RuntimeResult{
    {direction:name,seed:seed+1,outcome:'loss',winner:name==='forward'?'B':'A'},
   ],
  });
- return {type:'simulation_batch',version:'batch-v1-isolated-worker',runtime:'B223_CANONICAL_PYTHON_VIA_PYODIDE',trials_per_direction:trials,forward:direction('forward',forwardSeed,100,100),reverse:direction('reverse',reverseSeed,50,-50),candidate_assignment:{ok:true},formal_status:'PASS'};
+ return {type:'simulation_batch',version:'batch-v2-streaming-worker',runtime:'B223_CANONICAL_PYTHON_VIA_PYODIDE',trials_per_direction:trials,forward:direction('forward',forwardSeed,100,100),reverse:direction('reverse',reverseSeed,50,-50),candidate_assignment:{ok:true},formal_status:'PASS'};
 }
 
 function successfulResponder(worker:WorkerMock,message:WorkerMessage){
@@ -42,15 +43,16 @@ function successfulResponder(worker:WorkerMock,message:WorkerMessage){
 describe('RuntimeClient',()=>{
  afterEach(()=>{WorkerMock.instances=[];WorkerMock.responder=null;vi.unstubAllGlobals();});
 
- it('runs 50 forward and 50 reverse battles in five isolated workers, then fetches win and loss details separately',async()=>{
+ it('streams five balanced batches and two details through one persistent Pyodide worker',async()=>{
   vi.stubGlobal('Worker',WorkerMock);WorkerMock.responder=successfulResponder;const progress:BattleCalculationProgress[]=[];
   const result=await new RuntimeClient().calculate(request,value=>progress.push(value));
   const messages=WorkerMock.instances.flatMap(worker=>worker.postMessage.mock.calls.map(call=>call[0] as WorkerMessage));
   const batches=messages.filter(message=>message.type==='calculateBatch'),details=messages.filter(message=>message.type==='detail');
   expect(batches).toHaveLength(5);expect(batches.map(message=>message.request.trials)).toEqual([10,10,10,10,10]);
   expect(batches.map(message=>message.request.forward_seed)).toEqual([1326230000,1326230010,1326230020,1326230030,1326230040]);
-  expect(details).toHaveLength(2);expect(WorkerMock.instances).toHaveLength(7);expect(WorkerMock.instances.every(worker=>worker.terminate.mock.calls.length>0)).toBe(true);
-  expect(result).toMatchObject({version:'adapter-v1-browser-100-isolated-batches',trials_total:100,win_rate:.6,hp_diff:75});
+  expect(details).toHaveLength(2);expect(WorkerMock.instances).toHaveLength(1);expect(WorkerMock.instances[0]?.terminate).not.toHaveBeenCalled();
+  expect(result).toMatchObject({version:'adapter-v2-browser-100-streaming-batches',trials_total:100,win_rate:.6,hp_diff:75});
+  expect(result.sim).toMatchObject({browser_execution_policy:'CANONICAL_SIMULATE_ONCE_50_FORWARD_50_REVERSE_STREAMED_SINGLE_PYODIDE_WORKER'});
   expect(result.battle_evaluation).toMatchObject({summary:{requestedBattles:100,completedBattles:100,wins:60,losses:40,draws:0,winRate:.6},examples:[{outcome:'win'},{outcome:'loss'}]});
   expect(progress.filter(value=>value.stage==='battles').map(value=>value.completedBattles)).toEqual([20,40,60,80,100]);
   expect(progress.at(-1)).toMatchObject({stage:'examples',completedExamples:2,totalExamples:2});
@@ -63,7 +65,14 @@ describe('RuntimeClient',()=>{
   };
   const result=await new RuntimeClient().calculate(request);
   const trials=WorkerMock.instances.flatMap(worker=>worker.postMessage.mock.calls.map(call=>(call[0] as WorkerMessage))).filter(message=>message.type==='calculateBatch').map(message=>message.request.trials);
-  expect(trials).toEqual([10,5,5,10,10,10,10]);expect(result).toMatchObject({trials_total:100,win_rate:.6});
+  expect(trials).toEqual([10,5,5,10,10,10,10]);expect(WorkerMock.instances).toHaveLength(2);expect(WorkerMock.instances[0]?.terminate).toHaveBeenCalledOnce();expect(result).toMatchObject({trials_total:100,win_rate:.6});
+ });
+
+ it('preserves a structured Python traceback and does not misread it as a retryable bare Wasm crash',async()=>{
+  vi.stubGlobal('Worker',WorkerMock);WorkerMock.responder=(worker,message)=>worker.runtimeError(message,'worker_stage=execute\npython_error_type=RuntimeError\npython_error_message=broken formation lane\npython_traceback=Traceback: exact failure');
+  await expect(new RuntimeClient().calculate(request)).rejects.toThrow('対戦エンジンでエラーが発生しました（RUNTIME-001）');
+  const batches=WorkerMock.instances.flatMap(worker=>worker.postMessage.mock.calls.map(call=>call[0] as WorkerMessage)).filter(message=>message.type==='calculateBatch');
+  expect(batches).toHaveLength(1);expect(WorkerMock.instances).toHaveLength(1);
  });
 
  it('uses a distinct cancellation error and terminates the active worker',async()=>{
