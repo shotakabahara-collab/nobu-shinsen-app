@@ -19,6 +19,7 @@ type Props={
  ownedWarriors:WarriorRecord[];
  onApply:(value:ImageFormationImportValue)=>void;
  recognize?:typeof recognizeFormationImages;
+ initialOpen?:boolean;
 };
 
 const confidenceLabel={high:'確定度 高',medium:'要確認',low:'候補',missing:'未確認'} as const;
@@ -39,9 +40,9 @@ function toApplyValue(draft:FormationImageDraft):ImageFormationImportValue{
  };
 }
 
-export function ImageFormationImporter({officers,skills,ownedWarriors,onApply,recognize=recognizeFormationImages}:Props){
+export function ImageFormationImporter({officers,skills,ownedWarriors,onApply,recognize=recognizeFormationImages,initialOpen=false}:Props){
  const input=useRef<HTMLInputElement>(null);const pasteZone=useRef<HTMLDivElement>(null);
- const [open,setOpen]=useState(false);const [files,setFiles]=useState<File[]>([]);const [previews,setPreviews]=useState<string[]>([]);
+ const [open,setOpen]=useState(initialOpen);const [files,setFiles]=useState<File[]>([]);const [previews,setPreviews]=useState<string[]>([]);
  const [running,setRunning]=useState(false);const [progress,setProgress]=useState(0);const [status,setStatus]=useState('');const [error,setError]=useState('');const [draft,setDraft]=useState<FormationImageDraft|null>(null);
 
  useEffect(()=>{const urls=files.map(file=>URL.createObjectURL(file));setPreviews(urls);return()=>urls.forEach(URL.revokeObjectURL);},[files]);
