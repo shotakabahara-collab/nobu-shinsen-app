@@ -34,7 +34,7 @@ def _example_targets(rate):
     value=float(rate or 0.0)
     if value>=0.999999:return {'win':1,'loss':0}
     if value<=0.000001:return {'win':0,'loss':1}
-    return {'win':2,'loss':2}
+    return {'win':1,'loss':1}
 
 
 def _state_map(rows, direction):
@@ -206,4 +206,4 @@ def build_battle_examples(request_json, summary_json):
             try:examples.append(_build_example(candidate,target,direction,seed,outcome))
             except Exception as error:examples.append({'outcome':outcome,'direction':direction,'seed':seed,'error':repr(error),'turns':[]})
     wins,losses,draws,completed=_summary_counts(summary)
-    return json.dumps({'schemaVersion':1,'trialsPerDirection':int(summary.get('trials_per_direction') or req.get('trials') or 0),'directions':2,'completedTrials':completed,'candidateWins':wins,'candidateLosses':losses,'draws':draws,'examples':examples,'selectionPolicy':'win/loss up to 2 each; 100% or 0% returns one existing-side example'},ensure_ascii=False)
+    return json.dumps({'schemaVersion':1,'trialsPerDirection':int(summary.get('trials_per_direction') or req.get('trials') or 0),'directions':2,'completedTrials':completed,'candidateWins':wins,'candidateLosses':losses,'draws':draws,'examples':examples,'selectionPolicy':'one win and one loss example; 100% or 0% returns one existing-side example'},ensure_ascii=False)
