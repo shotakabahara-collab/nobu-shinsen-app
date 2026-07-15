@@ -29,7 +29,7 @@ test('opens on iPhone and presents visible image import, photo library and camer
 
  await page.getByRole('button',{name:'対戦・提案'}).click();
  await expect(page.getByRole('heading',{name:'対戦・最適編成'})).toBeVisible();
- await expect(page.getByRole('button',{name:'100戦／方向で対戦'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'100戦で対戦'})).toBeDisabled();
  await expect(page.getByRole('button',{name:'最適編成を探索'})).toBeDisabled();
  await page.getByRole('button',{name:'データ'}).click();
  await expect(page.getByRole('region',{name:'PWA実機診断'})).toBeVisible();
@@ -52,18 +52,18 @@ test('shows 100-run win-loss examples, T1-T8 actions and troop changes online an
  const activeTurn={turn:1,status:'active',startTroops:start,endTroops:end,turnStartEvents:[],turnStartChanges:[],actions:[{rank:1,side:'A',rawSide:'A',officer:'山本勘助',role:'大将',effectiveSpeed:153,baseSpeed:153,timedSpeedBonus:0,persistentSpeedBonus:0,events:['A:山本勘助 通常攻撃 -> B:黒田官兵衛 1000'],troopChanges:[{side:'B',officer:'黒田官兵衛',before:10000,after:9000,delta:-1000,kind:'troops',source:'通常攻撃'}]}],turnEndChanges:[]};
  const ended=(turn:number)=>({turn,status:'battle_ended',startTroops:end,endTroops:end,turnStartEvents:[],turnStartChanges:[],actions:[],turnEndChanges:[]});
  const example=(outcome:'win'|'loss',seed:number)=>({outcome,direction:'forward',seed,winner:outcome==='win'?'A':'B',winReason:'commander_kill',endedTurn:1,maxTurns:8,hpDiff:outcome==='win'?1000:-1000,turns:[activeTurn,...[2,3,4,5,6,7,8].map(ended)]});
- const payload={battle_snapshot:battleSnapshot,battle_examples:{schemaVersion:1,trialsPerDirection:100,directions:2,completedTrials:200,candidateWins:120,candidateLosses:80,draws:0,selectionPolicy:'test',examples:[example('win',100),example('loss',200)]}};
- const battleResult={id:'00000000-0000-4000-8000-000000000003',allyId:formations[0].id,enemyId:formations[1].id,createdAt:now,status:'completed',winRate:.6,hpDiff:100,trials:100,blocks:1,runtime:'runtime',payload};
+ const payload={battle_snapshot:battleSnapshot,battle_examples:{schemaVersion:1,trialsPerDirection:50,directions:2,completedTrials:100,candidateWins:60,candidateLosses:40,draws:0,selectionPolicy:'test',examples:[example('win',100),example('loss',200)]}};
+ const battleResult={id:'00000000-0000-4000-8000-000000000003',allyId:formations[0].id,enemyId:formations[1].id,createdAt:now,status:'completed',winRate:.6,hpDiff:100,trials:50,blocks:1,runtime:'runtime',payload};
  const backup={schemaVersion:2,exportedAt:now,warriors:[],skills:[],formations,battleResults:[battleResult]};
 
  await page.goto('./');await page.getByRole('button',{name:'データ'}).click();
  await page.locator('input[type="file"]').setInputFiles({name:'battle-log-e2e.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
  await expect(page.getByText('バックアップを復元しました（編成2件）',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'対戦・提案'}).click();
- await expect(page.getByRole('button',{name:'100戦／方向で対戦'})).toBeEnabled();
+ await expect(page.getByRole('button',{name:'100戦で対戦'})).toBeEnabled();
  await page.getByRole('button',{name:/山本騎馬 vs 黒田弓/}).click();
  await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('60.0%');
- await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('完了200試行');
+ await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('完了100試行');
  const examples=page.getByRole('region',{name:'勝敗別戦闘例'});await expect(examples).toBeVisible();
  await expect(examples.getByRole('button',{name:'勝ち例1'})).toBeVisible();await expect(examples.getByRole('button',{name:'負け例1'})).toBeVisible();
  await expect(examples.getByRole('button',{name:'勝ち例2'})).toHaveCount(0);await expect(examples.getByRole('button',{name:'負け例2'})).toHaveCount(0);
