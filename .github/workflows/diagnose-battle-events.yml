@@ -1,0 +1,41 @@
+name: Diagnose Battle Events
+on:
+  push:
+    branches: [agent/battle-log-turn-actions-100x1]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/build_runtime_bundle.py >/dev/null
+      - name: Export 100-battle trace structure
+        run: |
+          python3 - <<'PY'
+          import json,sys,tarfile,tempfile
+          from pathlib import Path
+          root=Path.cwd()
+          with tempfile.TemporaryDirectory() as td:
+            with tarfile.open(root/'public/runtime_bundle_b223.tgz','r:gz') as bundle: bundle.extractall(td)
+            engine=Path(td)/'02_ENGINE';sys.path.insert(0,str(engine))
+            import browser_runtime_api as api
+            request={
+              'candidate':api.TARGETS['YAMAMOTO'],
+              'target':'KURODA',
+              'target_spec':api.TARGETS['KURODA'],
+              'trials':100,'blocks':1,'seed':1326230000,'include_detail':True,
+            }
+            result=json.loads(api.evaluate_request(request))
+            def prune(value,depth=0):
+              if depth>10:return type(value).__name__
+              if isinstance(value,dict):return {str(k):prune(v,depth+1) for k,v in value.items()}
+              if isinstance(value,list):return [prune(v,depth+1) for v in value[:30]]
+              if isinstance(value,(str,int,float,bool)) or value is None:return value
+              return str(value)
+            (root/'battle-events-diagnostic.json').write_text(json.dumps(prune(result),ensure_ascii=False,indent=2),encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: battle-events-diagnostic
+          path: battle-events-diagnostic.json
