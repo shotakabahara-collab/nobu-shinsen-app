@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {formationSchema,troopTypes,type Formation,type SkillRecord,type WarriorRecord} from '../domain/schemas';
-import {calculateTroopLevel,findDuplicateEquippedSkill,normalizeFormationName,type EquippedSkillLocation} from '../domain/formationRules';
+import {calculateTroopLevel,findDuplicateEquippedSkill,normalizeFormationName,validateFormalFormationSkills,type EquippedSkillLocation} from '../domain/formationRules';
 import {findCanonicalOfficer,loadCanonicalOfficerCatalog,type CanonicalOfficer} from '../services/canonicalOfficerCatalog';
 import {loadCanonicalSkillCatalog,type CanonicalSkill} from '../services/canonicalSkillCatalog';
 import {AutocompleteInput,type AutocompleteOption} from './ui/AutocompleteInput';
@@ -84,6 +84,7 @@ export function FormationEditor({initial,initialImageImportOpen=false,warriors=[
  },[canonicalSkillByName,inherentNames,skillCatalog,skills]);
 
  const troopLevel=useMemo(()=>calculateTroopLevel(value.troopType,value.warriors,officerCatalog,skillCatalog,unitLevelRule),[officerCatalog,skillCatalog,unitLevelRule,value.troopType,value.warriors]);
+ const formalSkillIssues=useMemo(()=>skillCatalog.length?validateFormalFormationSkills(value.troopType,value.warriors,skillCatalog).filter(issue=>issue.code!=='unknown-skill'):[],[skillCatalog,value.troopType,value.warriors]);
 
  useEffect(()=>{
   if(canonicalOfficers){setOfficerCatalog(canonicalOfficers);setOfficerCatalogError('');return;}
@@ -175,6 +176,7 @@ export function FormationEditor({initial,initialImageImportOpen=false,warriors=[
   }
   const duplicate=findDuplicateEquippedSkill(value.warriors);
   if(duplicate){setWarning({title:'装着戦法が重複しています',message:`「${duplicate.name}」は${slotLabel(duplicate.first)}と${slotLabel(duplicate.duplicate)}で重複しています。修正するまで保存できません。`});return;}
+  if(formalSkillIssues.length){setWarning({title:'正本ルールにより保存できません',message:formalSkillIssues.map(issue=>`・${issue.message}`).join('\n')});return;}
   const normalized={
    ...value,
    kind:'ally' as const,
@@ -214,6 +216,7 @@ export function FormationEditor({initial,initialImageImportOpen=false,warriors=[
   </section>
   {officerCatalogError&&<p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-300">{officerCatalogError}。未登録武将は固有戦法を手入力できます。</p>}
   {skillCatalogError&&<p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-300">{skillCatalogError}。登録済み戦法は引き続き入力できます。</p>}
+  {formalSkillIssues.length>0&&value.warriors.every(warrior=>warrior.equippedSkills.every(Boolean))&&<aside role="alert" className="rounded-xl bg-red-950 p-3 text-sm leading-6 text-red-200"><strong>正本ルールに合わない戦法構成です</strong><ul>{formalSkillIssues.map(issue=><li key={`${issue.code}-${issue.skillNames.join('-')}`}>・{issue.message}</li>)}</ul></aside>}
   {value.warriors.map((warrior,index)=>{
    const canonical=canonicalByName.get(normalizeFormationName(warrior.name));
    return <section key={warrior.id} className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
@@ -232,7 +235,7 @@ export function FormationEditor({initial,initialImageImportOpen=false,warriors=[
   {warning&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-5" role="alertdialog" aria-modal="true" aria-labelledby="formation-warning-title" aria-describedby="formation-warning-message">
    <div className="w-full max-w-sm rounded-2xl border border-amber-500 bg-slate-900 p-5 shadow-2xl">
     <h2 id="formation-warning-title" className="text-lg font-bold text-amber-400">{warning.title}</h2>
-    <p id="formation-warning-message" className="mt-3 text-sm leading-6 text-slate-200">{warning.message}</p>
+    <p id="formation-warning-message" className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-200">{warning.message}</p>
     <Button type="button" className="mt-5 w-full" onClick={()=>setWarning(null)}>確認</Button>
    </div>
   </div>}

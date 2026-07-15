@@ -12,8 +12,10 @@ const canonicalSkillSchema=z.object({
  name:z.string().trim().min(1),
  type:z.string().default(''),
  attachable:z.boolean(),
+ slotType:z.enum(['normal','unitType','formation']).optional(),
+ allowedUnitTypes:z.array(unitTypeSchema).default([]),
  unitLevelEffects:z.array(unitLevelEffectSchema).default([]),
-});
+}).transform(value=>({...value,slotType:value.slotType??(value.type==='兵種'?'unitType':value.type==='陣形'?'formation':'normal')}));
 const canonicalSkillCatalogSchema=z.object({schemaVersion:z.literal(1),canonicalVersion:z.string().min(1),canonicalArchiveSha256:z.string().length(64),skillCount:z.number().int().positive(),skills:z.array(canonicalSkillSchema)}).superRefine((value,ctx)=>{
  const names=value.skills.map(skill=>skill.name);
  if(new Set(names).size!==names.length)ctx.addIssue({code:'custom',message:'正本戦法カタログに戦法名の重複があります',path:['skills']});

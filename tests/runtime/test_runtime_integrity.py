@@ -51,6 +51,9 @@ class RuntimeIntegrityTest(unittest.TestCase):
   self.assertEqual(catalog['schemaVersion'],1);self.assertEqual(catalog['canonicalVersion'],LOCK['canonicalVersion']);self.assertEqual(catalog['canonicalArchiveSha256'],LOCK['archiveSha256']);self.assertEqual(catalog['skillCount'],len(catalog['skills']))
   names=[row['name'] for row in catalog['skills']];self.assertEqual(len(names),len(set(names)));by_name={row['name']:row for row in catalog['skills']}
   self.assertTrue(by_name['紅蓮の炎']['attachable']);self.assertFalse(by_name['梟雄の計']['attachable']);self.assertEqual(by_name['有備無患']['type'],'能動');self.assertTrue(by_name['有備無患']['attachable'])
+  self.assertEqual(by_name['僧兵']['slotType'],'unitType');self.assertEqual(by_name['僧兵']['allowedUnitTypes'],['足軽'])
+  self.assertEqual(by_name['鉄砲僧兵']['slotType'],'unitType');self.assertEqual(by_name['鉄砲僧兵']['allowedUnitTypes'],['鉄砲'])
+  self.assertEqual(by_name['会盟の陣']['slotType'],'formation')
   self.assertTrue(all(isinstance(row.get('unitLevelEffects'),list) for row in catalog['skills']));self.assertEqual(by_name['紅蓮の炎']['unitLevelEffects'],[])
 
  def test_bundle_manifest_matches_release_lock(self):

@@ -16,6 +16,10 @@ describe('classifyRuntimeError',()=>{
   expect(result.code).toBe('RUNTIME-001');expect(result.detail).toContain('python_error_type=RuntimeError');
  });
  it('maps missing skills to a data error',()=>expect(classifyRuntimeError(new Error('resolve_skills unknown skill')).code).toBe('DATA-003'));
+ it('maps the reported double unit-type formal stop to a non-retryable data error',()=>{
+  const result=classifyRuntimeError(new Error('FORMAL_BATTLE_INPUT_CONTRACT_STOP ["left: formal_status_stop:STOP_UNIT_TYPE_LIMIT"] 兵種戦法は1枚まで'));
+  expect(result.code).toBe('DATA-003');expect(result.title).toContain('兵種戦法');expect(result.retryable).toBe(false);
+ });
  it('maps network failures to a retryable network error',()=>{
   const result=classifyRuntimeError(new Error('Failed to fetch runtime bundle'));
   expect(result.code).toBe('NETWORK-001');

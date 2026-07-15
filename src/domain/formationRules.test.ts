@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {calculateTroopLevel,findDuplicateEquippedSkill} from './formationRules';
+import {calculateTroopLevel,findDuplicateEquippedSkill,validateFormalFormationSkills} from './formationRules';
 
 const warrior=(name:string,limitBreak:number,inherentSkill='未登録',equippedSkills:[string,string]=['',''])=>({name,limitBreak,inherentSkill,equippedSkills});
 
@@ -18,6 +18,34 @@ describe('findDuplicateEquippedSkill',()=>{
    warrior('武将2',0,'固有2',['C','D']),
    warrior('武将3',0,'固有3',['E','F']),
   ])).toBeUndefined();
+ });
+});
+
+describe('validateFormalFormationSkills',()=>{
+ it('reports the submitted 僧兵 and 鉄砲僧兵 combination before runtime starts',()=>{
+  const warriors=[
+   warrior('鈴木佐大夫',0,'弾嵐雨霞',['有備無患','破天の轟']),
+   warrior('本願寺顕如',0,'一向一揆',['僧兵','攻其不備']),
+   warrior('妻木煕子',0,'内助の賢',['大智不智','鉄砲僧兵']),
+  ];
+  const normal=(name:string)=>({name,type:'能動',attachable:true,slotType:'normal' as const,allowedUnitTypes:[]});
+  const skills=[
+   ...['有備無患','破天の轟','攻其不備','大智不智'].map(normal),
+   {name:'僧兵',type:'兵種',attachable:true,slotType:'unitType' as const,allowedUnitTypes:['足軽' as const]},
+   {name:'鉄砲僧兵',type:'兵種',attachable:true,slotType:'unitType' as const,allowedUnitTypes:['鉄砲' as const]},
+  ];
+  const issues=validateFormalFormationSkills('鉄砲',warriors,skills);
+  expect(issues.map(issue=>issue.code)).toEqual(['unit-type-skill-limit','unit-type-mismatch']);
+  expect(issues[0]?.message).toContain('「僧兵」・「鉄砲僧兵」');
+  expect(issues[1]?.message).toBe('「僧兵」は足軽専用のため、鉄砲編成では使用できません。');
+ });
+
+ it('allows one unit-type skill matching the formation unit',()=>{
+  const issues=validateFormalFormationSkills('鉄砲',[warrior('武将',0,'固有',['鉄砲僧兵','通常戦法'])],[
+   {name:'鉄砲僧兵',type:'兵種',attachable:true,slotType:'unitType',allowedUnitTypes:['鉄砲']},
+   {name:'通常戦法',type:'能動',attachable:true,slotType:'normal',allowedUnitTypes:[]},
+  ]);
+  expect(issues).toEqual([]);
  });
 });
 

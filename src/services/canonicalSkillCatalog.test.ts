@@ -8,7 +8,7 @@ const payload={
  skillCount:2,
  skills:[
   {id:'KNY_0001',name:'紅蓮の炎',type:'能動',attachable:true,unitLevelEffects:[]},
-  {id:'KNY_0002',name:'兵種覚醒',type:'指揮',attachable:true,unitLevelEffects:[{name:'兵種覚醒',unitTypes:['騎馬' as const],levelBonus:0,capUnlock:true}]},
+  {id:'KNY_0002',name:'兵種覚醒',type:'兵種',attachable:true,allowedUnitTypes:['騎馬' as const],unitLevelEffects:[{name:'兵種覚醒',unitTypes:['騎馬' as const],levelBonus:0,capUnlock:true}]},
  ],
 };
 
@@ -16,6 +16,8 @@ describe('loadCanonicalSkillCatalog',()=>{
  it('loads a valid catalog with optional unit-level effects',async()=>{
   const fetcher=async()=>new Response(JSON.stringify(payload),{status:200});
   const result=await loadCanonicalSkillCatalog(fetcher as typeof fetch,'/catalog.json');
+  expect(result.skills[0]).toMatchObject({slotType:'normal',allowedUnitTypes:[]});
+  expect(result.skills[1]).toMatchObject({slotType:'unitType',allowedUnitTypes:['騎馬']});
   expect(result.skills[1]?.unitLevelEffects[0]).toEqual({name:'兵種覚醒',unitTypes:['騎馬'],levelBonus:0,capUnlock:true});
  });
 
