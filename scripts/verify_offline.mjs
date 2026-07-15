@@ -15,6 +15,9 @@ const bundleSha=createHash('sha256').update(bundle).digest('hex');
 
 for(const asset of required)if(!sw.includes(asset))throw new Error(`offline precache missing: ${asset}`);
 if(/https?:\/\//.test(worker))throw new Error('runtime worker still contains an external URL');
+if(!worker.includes("req['trials']=50")||!worker.includes("req['blocks']=1"))throw new Error('runtime worker does not enforce 50 forward + 50 reverse battles');
+if(!worker.includes("payload['battle_evaluation']")||!worker.includes("'max_turns':8"))throw new Error('runtime worker does not retain T1-T8 battle examples');
+if(!worker.includes("if summary['wins']>0")||!worker.includes("if summary['losses']>0"))throw new Error('runtime worker does not retain one available win and loss example');
 if(bundleSha!==lock.runtimeBundleSha256)throw new Error(`runtime bundle SHA mismatch: ${bundleSha}`);
 if(officerCatalog.canonicalVersion!==lock.canonicalVersion||officerCatalog.canonicalArchiveSha256!==lock.archiveSha256)throw new Error('canonical officer catalog release lock mismatch');
 if(!Array.isArray(officerCatalog.officers)||officerCatalog.officerCount!==officerCatalog.officers.length)throw new Error('canonical officer catalog is malformed');
@@ -34,4 +37,4 @@ if(skillByName.get('梟雄の計')?.attachable!==false||skillByName.get('紅蓮�
 if(!skillCatalog.skills.every(skill=>Array.isArray(skill.unitLevelEffects)))throw new Error('canonical skill unit-level effects are malformed');
 if(manifest.display!=='standalone'||manifest.orientation!=='portrait'||manifest.start_url!=='/nobu-shinsen-app/')throw new Error('PWA manifest is not configured for iPhone standalone launch');
 for(const size of ['192x192','512x512'])if(!manifest.icons?.some(icon=>icon.sizes===size&&icon.type==='image/png'))throw new Error(`PWA manifest missing PNG icon: ${size}`);
-console.log(`offline precache verified: ${required.length} required assets; ${officerCatalog.officerCount} canonical officers; ${officerStats.recordCount} officer/awaken stat rows; ${skillCatalog.skillCount} canonical skills; runtime bundle ${bundleSha}`);
+console.log(`offline precache verified: ${required.length} required assets; 100 balanced battles with T1-T8 examples; ${officerCatalog.officerCount} canonical officers; ${officerStats.recordCount} officer/awaken stat rows; ${skillCatalog.skillCount} canonical skills; runtime bundle ${bundleSha}`);
