@@ -36,9 +36,10 @@ jobs:
             shutil.copy2(engine/'battle_simulator.py',root/'battle-simulator-diagnostic.py')
             shutil.copy2(engine/'browser_runtime_api.py',root/'browser-runtime-api-diagnostic.py')
           PY
-      - name: Capture build output
+      - name: Capture test and build output
         run: |
           npm ci >/dev/null
+          npm test > test-diagnostic.log 2>&1 || true
           npm run build > build-diagnostic.log 2>&1 || true
       - uses: actions/upload-artifact@v4
         with:
@@ -48,4 +49,5 @@ jobs:
             battle-detail-examples.json
             battle-simulator-diagnostic.py
             browser-runtime-api-diagnostic.py
+            test-diagnostic.log
             build-diagnostic.log
