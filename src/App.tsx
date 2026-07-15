@@ -1,11 +1,12 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Download,Upload,Trash2,Swords,Square,Plus,Pencil,Target,Save,CheckCircle2} from 'lucide-react';
+import {Download,Upload,Trash2,Swords,Square,Plus,Pencil,Target,Save,CheckCircle2,ImagePlus} from 'lucide-react';
 import {Button} from './components/ui/button';
 import {FormationEditor} from './components/FormationEditor';
 import {CatalogManager} from './components/CatalogManager';
 import {PwaStatus} from './components/PwaStatus';
 import {InstallGuide} from './components/InstallGuide';
 import {PwaDiagnostics} from './components/PwaDiagnostics';
+import {IMAGE_IMPORT_OPEN_REQUEST} from './components/ImageFormationImporter';
 import {useAppStore} from './store/appStore';
 import {createExport,downloadExport,parseImport} from './services/transfer';
 import {toRuntimeFormation} from './runtime/formationAdapter';
@@ -65,6 +66,11 @@ export default function App(){
    await store.replaceAll(value);
    setNotice(`バックアップを復元しました（編成${value.formations.length}件）`);
   }catch{setNotice('形式が正しくないため読み込めません');}
+ }
+
+ function openImageRegistration(){
+  try{sessionStorage.setItem(IMAGE_IMPORT_OPEN_REQUEST,'1');}catch{/* session storage may be unavailable */}
+  setEditing('new');
  }
 
  function cancelRuntime(message='処理を中止しました'){
@@ -130,7 +136,9 @@ export default function App(){
    {notice&&<p role="status" className="rounded-xl bg-amber-950 p-3 text-sm text-amber-300">{notice}</p>}
 
    {page==='formations'&&<>
-    <div className="flex items-center justify-between"><h2 className="text-xl font-bold">編成</h2><Button onClick={()=>setEditing('new')}><Plus className="mr-2 size-4"/>新規</Button></div>
+    <div><h2 className="text-xl font-bold">編成</h2><p className="mt-1 text-sm text-slate-400">手入力またはゲーム画面の画像から編成を登録できます。</p></div>
+    <div className="grid grid-cols-2 gap-3"><Button variant="secondary" onClick={openImageRegistration}><ImagePlus className="mr-2 size-4"/>画像から登録</Button><Button onClick={()=>setEditing('new')}><Plus className="mr-2 size-4"/>手入力で新規</Button></div>
+    <section className="rounded-2xl border border-cyan-800 bg-cyan-950/30 p-4"><button type="button" onClick={openImageRegistration} className="flex w-full items-center gap-3 text-left"><span className="rounded-xl bg-cyan-900 p-3"><ImagePlus className="size-6 text-cyan-300"/></span><span><strong className="text-cyan-200">スクリーンショットを自動読込</strong><span className="mt-1 block text-xs leading-5 text-slate-400">武将名・兵種・凸・装着戦法を解析し、確認後に登録します。</span></span></button></section>
     {store.loading&&<p>読込中...</p>}
     {!store.loading&&!store.formations.length&&<p className="rounded-2xl border border-slate-700 bg-slate-900 py-12 text-center text-slate-500">編成を登録してください</p>}
     {store.formations.map(formation=><article key={formation.id} className="flex items-center justify-between rounded-2xl border border-slate-700 bg-slate-900 p-4"><div><strong>{formation.name}</strong><p className="text-xs text-slate-400">{formation.troopType} Lv{formation.troopLevel}・兵力{formation.troops}</p><p className="mt-1 text-xs text-slate-500">{formation.warriors.map(value=>value.name).join('・')}</p></div><div className="flex gap-2"><Button aria-label={`${formation.name}を編集`} variant="secondary" onClick={()=>setEditing(formation)}><Pencil className="size-4"/></Button><Button aria-label={`${formation.name}を削除`} variant="danger" onClick={()=>{if(window.confirm(`${formation.name}を削除しますか？`))void store.remove(formation.id).catch(()=>{});}}><Trash2 className="size-4"/></Button></div></article>)}
