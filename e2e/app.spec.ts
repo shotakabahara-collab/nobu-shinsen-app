@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 
-test('opens on iPhone and presents generic matchup and optimizer controls',async({page,request})=>{
+test('opens on iPhone and presents visible image import, matchup and optimizer controls',async({page,request})=>{
  await page.goto('./');
  await expect(page.getByRole('heading',{name:'NOBU Companion'})).toBeVisible();
  await expect(page.getByText('正本準拠シミュレーション',{exact:true})).toBeVisible();
@@ -11,9 +11,10 @@ test('opens on iPhone and presents generic matchup and optimizer controls',async
  expect((await request.get('/nobu-shinsen-app/canonical_officer_catalog.json')).ok()).toBe(true);
  expect((await request.get('/nobu-shinsen-app/canonical_skill_catalog.json')).ok()).toBe(true);
 
- await page.getByRole('button',{name:'新規'}).click();
+ const imageEntry=page.getByRole('button',{name:'画像から編成登録'});
+ await expect(imageEntry).toBeVisible();
+ await imageEntry.click();
  await expect(page.getByRole('region',{name:'画像から編成を読み込む'})).toBeVisible();
- await page.getByRole('button',{name:'開く'}).click();
  await expect(page.getByText('写真を選ぶ・撮影する・画像を貼り付ける')).toBeVisible();
  const imageInput=page.locator('input[type="file"][accept="image/*"]');
  await expect(imageInput).toHaveAttribute('multiple','');
