@@ -8,6 +8,8 @@
 - 武将・所有戦法の管理、IndexedDB永続化、全データのJSON Import / Export
 - b223の `calculate` / `search` / `formal` 境界、実勝率・計算状態・エラー表示
 - Battle Log保存・詳細表示、所有データを使う予算制限付き探索、30×3正式再評価
+- 順方向50戦＋逆方向50戦の100戦評価を10戦ずつ分割し、各バッチ後にPyodide workerを再生成するiPhone向けメモリ保護
+- 勝ち例／負け例のT1〜T8行動内容、対象、行動前後の兵数増減表示
 - iPhoneセーフエリア・ホーム画面用アイコン・standalone表示・オフラインキャッシュ
 - 固定SHAのcanonical archive・battle runtime・runtime bundleを用いた改変検知
 - Vitest、Python runtime E2E、Chromium iPhone viewport E2E、WebKit iPhone互換E2E
@@ -20,8 +22,7 @@
 
 ## 未検証
 
-- iPhone Safari実機でのホーム画面追加、standalone起動、機内モード利用
-- Draft PRをマージした後のGitHub Pages公開版
+- 物理iPhoneでの100戦分割実行の完走（WebKit自動検証とは別に公開版で最終確認）
 
 未検証項目は完成・PASS扱いしません。
 

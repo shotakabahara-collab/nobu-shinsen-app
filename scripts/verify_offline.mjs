@@ -16,8 +16,8 @@ const bundleSha=createHash('sha256').update(bundle).digest('hex');
 for(const asset of required)if(!sw.includes(asset))throw new Error(`offline precache missing: ${asset}`);
 if(/https?:\/\//.test(worker))throw new Error('runtime worker still contains an external URL');
 if(!worker.includes("from battle_simulator import simulate_once")||!worker.includes("runtime_mode='outcome_only'"))throw new Error('runtime worker does not use the canonical single-battle function for browser evaluation');
-if(!worker.includes("_run_direction(ctx,candidate,target,'forward',base_seed,50)")||!worker.includes("_run_direction(ctx,candidate,target,'reverse',base_seed+5003,50)"))throw new Error('runtime worker does not execute 50 forward and 50 reverse canonical battles');
-if(!worker.includes("'requestedBattles':100")||!worker.includes("'trials_total':completed"))throw new Error('runtime worker does not report the completed 100-battle total');
+if(!worker.includes('def calculate_batch(request_json):')||!worker.includes("required=max(1,min(10")||!worker.includes("calculateBatch:'calculate_batch'"))throw new Error('runtime worker does not expose the iPhone-safe isolated battle batch lane');
+if(!worker.includes("_run_direction(ctx,candidate,target,'forward',forward_seed,required)")||!worker.includes("_run_direction(ctx,candidate,target,'reverse',reverse_seed,required)"))throw new Error('runtime worker does not execute balanced forward and reverse canonical batches');
 if(!worker.includes("'battle_evaluation':{'schemaVersion':1")||!worker.includes("'max_turns':8"))throw new Error('runtime worker does not retain T1-T8 battle examples');
 if(!worker.includes("if wins>0")||!worker.includes("if losses>0"))throw new Error('runtime worker does not retain one available win and loss example');
 if(bundleSha!==lock.runtimeBundleSha256)throw new Error(`runtime bundle SHA mismatch: ${bundleSha}`);
@@ -39,4 +39,4 @@ if(skillByName.get('梟雄の計')?.attachable!==false||skillByName.get('紅蓮�
 if(!skillCatalog.skills.every(skill=>Array.isArray(skill.unitLevelEffects)))throw new Error('canonical skill unit-level effects are malformed');
 if(manifest.display!=='standalone'||manifest.orientation!=='portrait'||manifest.start_url!=='/nobu-shinsen-app/')throw new Error('PWA manifest is not configured for iPhone standalone launch');
 for(const size of ['192x192','512x512'])if(!manifest.icons?.some(icon=>icon.sizes===size&&icon.type==='image/png'))throw new Error(`PWA manifest missing PNG icon: ${size}`);
-console.log(`offline precache verified: ${required.length} required assets; canonical simulate_once 50+50 battles with T1-T8 examples; ${officerCatalog.officerCount} canonical officers; ${officerStats.recordCount} officer/awaken stat rows; ${skillCatalog.skillCount} canonical skills; runtime bundle ${bundleSha}`);
+console.log(`offline precache verified: ${required.length} required assets; canonical simulate_once 50+50 battles in isolated iPhone-safe batches with T1-T8 examples; ${officerCatalog.officerCount} canonical officers; ${officerStats.recordCount} officer/awaken stat rows; ${skillCatalog.skillCount} canonical skills; runtime bundle ${bundleSha}`);
