@@ -12,6 +12,12 @@ test('opens on iPhone and presents generic matchup and optimizer controls',async
  expect((await request.get('/nobu-shinsen-app/canonical_skill_catalog.json')).ok()).toBe(true);
 
  await page.getByRole('button',{name:'新規'}).click();
+ await expect(page.getByRole('region',{name:'画像から編成を読み込む'})).toBeVisible();
+ await page.getByRole('button',{name:'開く'}).click();
+ await expect(page.getByText('写真を選ぶ・撮影する・画像を貼り付ける')).toBeVisible();
+ const imageInput=page.locator('input[type="file"][accept="image/*"]');
+ await expect(imageInput).toHaveAttribute('multiple','');
+ await expect(imageInput).toHaveAttribute('capture','environment');
  const warrior=page.getByRole('combobox',{name:'大将 武将名'});
  await warrior.fill('永久');
  await page.getByRole('option',{name:/松永久秀/}).click();
