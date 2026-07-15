@@ -12,7 +12,7 @@ export type BattleSideSnapshot={side:BattleSide;formationId:string;formationName
 export type BattleSnapshot={schemaVersion:1;source:'canonical_officer_stats_catalog';sides:{A:BattleSideSnapshot;B:BattleSideSnapshot}};
 export type ActionOrderEntry={rank:number;side:BattleSide;rawSide:'A'|'B';officer:string;role:string;effectiveSpeed:number|null;baseSpeed:number|null;timedSpeedBonus:number;persistentSpeedBonus:number};
 export type ActionOrderTurn={turn:number;entries:ActionOrderEntry[]};
-export type RepresentativeTrace={direction:'forward'|'reverse';seed:number|null;winner:BattleSide|null;winReason:string;hpDiff:number|null;turns:ActionOrderTurn[];keyEvents:Record<string,unknown>[]};
+export type RepresentativeTrace={source:'runtime_trace'|'initial_speed_snapshot';direction:'forward'|'reverse';seed:number|null;winner:BattleSide|null;winReason:string;hpDiff:number|null;turns:ActionOrderTurn[];keyEvents:Record<string,unknown>[]};
 
 const roles=['大将','副将1','副将2'] as const;
 const emptyStats=():StatValues=>({force:null,intel:null,lead:null,speed:null});
@@ -46,26 +46,36 @@ export function parseBattleSnapshot(payload:Record<string,unknown>):BattleSnapsh
 }
 
 function canonicalSide(direction:'forward'|'reverse',raw:'A'|'B'):BattleSide{return direction==='forward'?raw:raw==='A'?'B':'A';}
+function rawSide(direction:'forward'|'reverse',canonical:BattleSide):'A'|'B'{return direction==='forward'?canonical:canonical==='A'?'B':'A';}
 function canonicalWinner(direction:'forward'|'reverse',raw:unknown):BattleSide|null{return raw==='A'||raw==='B'?canonicalSide(direction,raw):null;}
 
 export function extractRepresentativeTrace(payload:Record<string,unknown>,direction:'forward'|'reverse'):RepresentativeTrace|undefined{
  const sim=record(payload.sim),blocks=record(sim?.timeline_trace_blocks),directionBlocks=array(blocks?.[direction]);
- const firstBlock=record(directionBlocks[0]),representatives=array(firstBlock?.representative_traces),representative=record(representatives[0]),digest=record(representative?.timeline_digest);
+ const firstBlock=record(directionBlocks[0]),representatives=array(firstBlock?.representative_traces),representative=record(representatives.find(value=>{const row=record(value);return row&&!row.trace_rerun_failed&&record(row.timeline_digest);})??representatives[0]),digest=record(representative?.timeline_digest);
  if(!representative||!digest)return undefined;
  const digestTurns=record(digest.action_order_digest)??{};
  const turns:ActionOrderTurn[]=Object.entries(digestTurns).map(([turnValue,rows])=>({
   turn:Number(turnValue),entries:array(rows).map((rowValue):ActionOrderEntry=>{
-   const row=record(rowValue)??{};const rawSide:'A'|'B'=row.side==='B'?'B':'A';const side=canonicalSide(direction,rawSide);
-   return {rank:numberOrNull(row.rank)??0,side,rawSide,officer:stringOr(row.officer,'未確認'),role:'',effectiveSpeed:numberOrNull(row.effective_speed),baseSpeed:numberOrNull(row.base_speed),timedSpeedBonus:numberOrNull(row.timed_speed_bonus)??0,persistentSpeedBonus:numberOrNull(row.persistent_speed_bonus)??0};
+   const row=record(rowValue)??{};const raw:'A'|'B'=row.side==='B'?'B':'A';const side=canonicalSide(direction,raw);
+   return {rank:numberOrNull(row.rank)??0,side,rawSide:raw,officer:stringOr(row.officer,'未確認'),role:'',effectiveSpeed:numberOrNull(row.effective_speed),baseSpeed:numberOrNull(row.base_speed),timedSpeedBonus:numberOrNull(row.timed_speed_bonus)??0,persistentSpeedBonus:numberOrNull(row.persistent_speed_bonus)??0};
   }).sort((a,b)=>a.rank-b.rank),
- })).filter(row=>Number.isFinite(row.turn)).sort((a,b)=>a.turn-b.turn);
- return {direction,seed:numberOrNull(representative.seed),winner:canonicalWinner(direction,representative.winner),winReason:stringOr(representative.win_reason,'未確認'),hpDiff:numberOrNull(representative.hp_diff),turns,keyEvents:array(digest.key_events).map(value=>record(value)??{})};
+ })).filter(row=>Number.isFinite(row.turn)&&row.entries.length>0).sort((a,b)=>a.turn-b.turn);
+ if(!turns.length)return undefined;
+ return {source:'runtime_trace',direction,seed:numberOrNull(representative.seed),winner:canonicalWinner(direction,representative.winner),winReason:stringOr(representative.win_reason,'未確認'),hpDiff:numberOrNull(representative.hp_diff),turns,keyEvents:array(digest.key_events).map(value=>record(value)??{})};
+}
+
+export function buildInitialActionOrderTrace(snapshot:BattleSnapshot,direction:'forward'|'reverse'):RepresentativeTrace{
+ const entries=[...snapshot.sides.A.officers,...snapshot.sides.B.officers].sort((a,b)=>{
+  const speedA=a.actionOrderSpeed??Number.NEGATIVE_INFINITY,speedB=b.actionOrderSpeed??Number.NEGATIVE_INFINITY;
+  return speedB-speedA||a.side.localeCompare(b.side)||a.slot-b.slot;
+ }).map((officer,index):ActionOrderEntry=>({rank:index+1,side:officer.side,rawSide:rawSide(direction,officer.side),officer:officer.name,role:officer.role,effectiveSpeed:officer.actionOrderSpeed,baseSpeed:officer.allocated.speed,timedSpeedBonus:0,persistentSpeedBonus:0}));
+ return {source:'initial_speed_snapshot',direction,seed:null,winner:null,winReason:'代表試行の詳細trace未取得',hpDiff:null,turns:[{turn:1,entries}],keyEvents:[]};
 }
 
 export function enrichTraceRoles(trace:RepresentativeTrace,snapshot:BattleSnapshot|undefined):RepresentativeTrace{
  if(!snapshot)return trace;
  return {...trace,turns:trace.turns.map(turn=>({...turn,entries:turn.entries.map(entry=>{
-  const officer=snapshot.sides[entry.side].officers.find(value=>value.name===entry.officer);return {...entry,role:officer?.role??''};
+  const officer=snapshot.sides[entry.side].officers.find(value=>value.name===entry.officer);return {...entry,role:officer?.role??entry.role};
  })}))};
 }
 
