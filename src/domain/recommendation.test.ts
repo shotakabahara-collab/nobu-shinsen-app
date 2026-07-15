@@ -2,10 +2,11 @@ import {describe,expect,it,vi} from 'vitest';
 import type {RuntimeResult} from '../runtime/contracts';
 import type {CanonicalOfficer} from '../services/canonicalOfficerCatalog';
 import type {CanonicalSkill} from '../services/canonicalSkillCatalog';
-import {buildRecommendationReasons,getRankedRecommendations,nextRecommendationName,recommendationToFormation} from './recommendation';
+import {buildRecommendationReasons,getRankedRecommendations,nextRecommendationName,recommendationForRoleOrder,recommendationToFormation,swapCandidateRoles} from './recommendation';
 
-const candidate={officers:['柿崎景家','北条綱成','榊原康政'],awaken:[0,0,0],unit:'騎馬',skills:['A','B','C','D','E','F']};
-const result={type:'branch_optimizer',version:'adapter-v1',runtime:'B223',search_scope:{generated:120,budget:500,budget_cut:true,shortlist_simulated:4},ranked:[{candidate,min_win_rate:.7,avg_win_rate:.7,win_rates:{target:.7},hp_diffs:{target:123.4},structural_score:99,formal_status:'FORMAL_EVAL_READY'}]} satisfies RuntimeResult;
+const candidate={officers:['柿崎景家','北条綱成','榊原康政'],awaken:[1,2,3],unit:'騎馬',skills:['A','B','C','D','E','F']};
+const deputyAsCommander={officers:['榊原康政','北条綱成','柿崎景家'],awaken:[3,2,1],unit:'騎馬',skills:['E','F','C','D','A','B']};
+const result={type:'branch_optimizer',version:'adapter-v2-role-complete',runtime:'B223',search_scope:{generated:120,budget:500,budget_cut:true,shortlist_simulated:6,role_placements_simulated:6},ranked:[{candidate,min_win_rate:.7,avg_win_rate:.7,win_rates:{target:.7},hp_diffs:{target:123.4},structural_score:99,formal_status:'FORMAL_EVAL_READY',role_comparison:{complete:true,placements_simulated:6,expected_placements:6,selected_rank:1},role_variants:[{candidate,min_win_rate:.7,avg_win_rate:.7,win_rates:{target:.7}},{candidate:deputyAsCommander,min_win_rate:.6,avg_win_rate:.6,win_rates:{target:.6}}]}]} satisfies RuntimeResult;
 
 const officers:CanonicalOfficer[]=[
  {id:'1',name:'柿崎景家',inherentSkill:'越後二天',unitLevelTraits:[{name:'騎兵大将',unlockedAt:0,unitTypes:['騎馬'],levelBonus:3,capUnlock:true,capBonus:1}]},
@@ -24,7 +25,19 @@ describe('recommendation',()=>{
   expect(text).not.toMatch(/b223/i);
   expect(text).toContain('70.0%');
   expect(text).toContain('+123.4');
+  expect(text).toContain('大将・副将全6配置');
   expect(text).toContain('大域的な絶対最適を保証');
+ });
+
+ it('swaps the complete officer package and reuses that role variant evaluation',()=>{
+  const ranked=getRankedRecommendations(result)[0]!;
+  const swapped=swapCandidateRoles(ranked.candidate,0,2);
+  expect(swapped.officers).toEqual(['榊原康政','北条綱成','柿崎景家']);
+  expect(swapped.awaken).toEqual([3,2,1]);
+  expect(swapped.skills).toEqual(['E','F','C','D','A','B']);
+  const selected=recommendationForRoleOrder(ranked,swapped);
+  expect(selected.win_rates?.target).toBe(.6);
+  expect(selected.role_comparison?.complete).toBe(true);
  });
 
  it('converts the selected recommendation into a valid registered formation',()=>{

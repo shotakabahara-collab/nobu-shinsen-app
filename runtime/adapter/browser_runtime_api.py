@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import copy, itertools, json, time
+import copy, gc, itertools, json, time
 from custom_evaluate import load_context, resolve_officers_by_awaken_values, resolve_skills, build_best, public_best
 from battle_simulator import simulate_many_balanced
 
@@ -205,11 +205,41 @@ def _skill_variants(seed, skill_pool, skill_swap_depth, beam_width=96):
         yield variant
 
 def _permute_seed(seed, units):
-    officers=seed['officers']; awaken=seed['awaken']; skills=seed['skills']; stats=seed.get('stats') or [{},{},{}]
+    officers=seed['officers']; awaken=seed['awaken']; skills=seed['skills']; stats=list(seed.get('stats') or [])
+    while len(stats)<3:stats.append({})
     pairs=[skills[0:2],skills[2:4],skills[4:6]]
     for perm in itertools.permutations(range(3)):
         for unit in units:
             yield {'officers':[officers[i] for i in perm],'awaken':[awaken[i] for i in perm],'skills':sum((pairs[i] for i in perm),[]),'stats':[stats[i] for i in perm],'unit':unit,'fixed_placement':True,'ignore_formal_overlap':True}
+
+def _stable_stats(stats):
+    return json.dumps(stats or {},ensure_ascii=False,sort_keys=True,separators=(',',':'))
+
+def _spec_key(spec):
+    return (
+        tuple(spec['officers']),tuple(spec['awaken']),tuple(spec['skills']),
+        tuple(_stable_stats(row) for row in spec.get('stats') or []),spec['unit'],
+    )
+
+def _role_family_key(spec):
+    # A family keeps each officer's awaken/stat/skill package intact while ignoring
+    # whether that package is commander, deputy 1, or deputy 2.
+    packages=[]
+    stats=list(spec.get('stats') or [])
+    while len(stats)<3:stats.append({})
+    for index,name in enumerate(spec['officers']):
+        packages.append((name,int(spec['awaken'][index]),_stable_stats(stats[index]),tuple(spec['skills'][index*2:index*2+2])))
+    return (spec['unit'],tuple(sorted(packages,key=lambda row:json.dumps(row,ensure_ascii=False))))
+
+def _rank_key(row):
+    hp_values=[v for v in row.get('hp_diffs',{}).values() if isinstance(v,(int,float))]
+    return (
+        row['min_win_rate'] if row['min_win_rate'] is not None else -1,
+        row['avg_win_rate'] if row['avg_win_rate'] is not None else -1,
+        min(hp_values) if hp_values else float('-inf'),
+        sum(hp_values)/len(hp_values) if hp_values else float('-inf'),
+        row['structural_score'],
+    )
 
 def formalize_request(request_json):
     req=json.loads(request_json) if isinstance(request_json,str) else request_json
@@ -234,38 +264,65 @@ def optimize_request(request_json):
     search_mode=str(req.get('search_mode') or 'strongest')
     beam_audit_requested=bool(req.get('beam_recall_audit',False))
     trials=max(1,min(int(req.get('trials',2)),10));blocks=max(1,min(int(req.get('blocks',1)),2));seed0=int(req.get('seed',1326237000))
-    structural=[];seen=set();stopped=0;budget_cut=False;started=time.time();variant_count=0
+    structural=[];seen=set();stopped=0;budget_cut=False;started=time.time();variant_count=0;family_expected={}
     beam_audit=_beam_recall_audit([x.get('name') if isinstance(x,dict) else str(x) for x in skill_pool],beam_width) if beam_audit_requested and skill_swap_depth>=3 else {'performed':False,'reason':'not requested or full rebuild disabled'}
     for seed in seeds:
         for officer_variant in _base_variants(copy.deepcopy(seed),owned_pool,swap_depth):
             for variant in _skill_variants(officer_variant,skill_pool,skill_swap_depth,beam_width):
                 variant_count+=1
-                for spec in _permute_seed(variant,units):
-                    key=(tuple(spec['officers']),tuple(spec['skills']),spec['unit'])
-                    if key in seen:continue
-                    if len(seen)>=budget:
+                grouped={}
+                for spec in _permute_seed(variant,units):grouped.setdefault(_role_family_key(spec),[]).append(spec)
+                for family_key,specs in grouped.items():
+                    fresh=[spec for spec in specs if _spec_key(spec) not in seen]
+                    if not fresh:continue
+                    # Never spend the last part of the budget on only some of the six
+                    # role orders. A family is admitted atomically or left untouched.
+                    if len(seen)+len(fresh)>budget:
                         budget_cut=True;break
-                    seen.add(key)
-                    try:r=_make(spec)
-                    except BaseException:stopped+=1;continue
-                    if not str(r.get('formal_status','')).startswith('FORMAL_EVAL_READY'):
-                        stopped+=1;continue
-                    structural.append({'spec':spec,'score':float(r.get('score') or 0),'formal_status':r.get('formal_status'),'assignment':r.get('attach_assignment') or []})
+                    family_expected[family_key]=len(specs)
+                    for spec in fresh:
+                        seen.add(_spec_key(spec))
+                        try:r=_make(spec)
+                        except BaseException:stopped+=1;continue
+                        if not str(r.get('formal_status','')).startswith('FORMAL_EVAL_READY'):
+                            stopped+=1;continue
+                        structural.append({'spec':spec,'score':float(r.get('score') or 0),'formal_status':r.get('formal_status'),'assignment':r.get('attach_assignment') or [],'_role_family_key':family_key})
+                        if len(seen)%100==0:gc.collect()
                 if budget_cut:break
             if budget_cut:break
         if budget_cut:break
-    structural.sort(key=lambda x:x['score'],reverse=True)
-    shortlist=structural[:max(1,min(int(req.get('shortlist',4)),8))]
-    ranked=[]
-    for ci,item in enumerate(shortlist):
-        rates={};diffs={};cand=_make(item['spec'])
-        for ti,t in enumerate(targets):
-            tar=_make(t['spec']);sim=simulate_many_balanced(_ctx(),copy.deepcopy(cand),copy.deepcopy(tar),trials=trials,seed=seed0+ci*1000+ti*100,blocks=blocks)
-            rates[t['id']]=sim.get('left_balanced_win_rate');diffs[t['id']]=sim.get('avg_hp_diff_balanced')
-        vals=[v for v in rates.values() if isinstance(v,(int,float))]
-        ranked.append({'candidate':item['spec'],'structural_score':item['score'],'formal_status':item['formal_status'],'assignment':item['assignment'],'win_rates':rates,'hp_diffs':diffs,'min_win_rate':min(vals) if vals else None,'avg_win_rate':sum(vals)/len(vals) if vals else None})
-    ranked.sort(key=lambda x:((x['min_win_rate'] if x['min_win_rate'] is not None else -1),(x['avg_win_rate'] if x['avg_win_rate'] is not None else -1),x['structural_score']),reverse=True)
-    return json.dumps({'type':'branch_optimizer','version':'adapter-v1','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','claim_status':'PURPOSE_AWARE_BUDGETED_SEARCH_NO_GLOBAL_OPTIMUM_CLAIM','search_scope':{'search_mode':search_mode,'seed_count':len(seeds),'owned_pool_count':len(owned_pool),'swap_depth':swap_depth,'skill_swap_depth':skill_swap_depth,'confirmed_skill_pool_count':len(skill_pool),'skill_beam_width':beam_width,'skill_prefilter_basis':'adaptive exact 6-8 skills; beam 9+ using canonical optimizer_priority_score + optimizer_bucket','beam_recall_audit':beam_audit,'variant_count':variant_count,'generated':len(seen),'formal_ready':len(structural),'stopped':stopped,'budget':budget,'budget_cut':budget_cut,'units':units,'shortlist_simulated':len(shortlist),'trials_per_direction':trials,'blocks':blocks},'targets':[t['id'] for t in targets],'ranked':ranked,'elapsed_seconds':round(time.time()-started,3)},ensure_ascii=False)
+    families={}
+    for item in structural:families.setdefault(item['_role_family_key'],[]).append(item)
+    complete_families={key:items for key,items in families.items() if len(items)==family_expected.get(key,6)}
+    selectable=complete_families or families
+    legacy_shortlist=max(1,min(int(req.get('shortlist',4)),48))
+    family_limit=max(1,min(int(req.get('role_family_shortlist',(legacy_shortlist+5)//6)),8))
+    family_shortlist=sorted(selectable.items(),key=lambda pair:max(item['score'] for item in pair[1]),reverse=True)[:family_limit]
+    runtime_targets=[(t['id'],_make(t['spec'])) for t in targets]
+    ranked=[];placements_simulated=0
+    for fi,(family_key,items) in enumerate(family_shortlist):
+        role_rows=[]
+        # Common seeds within a family make commander/deputy comparisons fairer:
+        # only role order changes, not the random battle sequence.
+        for item in items:
+            rates={};diffs={};cand=_make(item['spec'])
+            for ti,(target_id,tar) in enumerate(runtime_targets):
+                sim=simulate_many_balanced(_ctx(),copy.deepcopy(cand),copy.deepcopy(tar),trials=trials,seed=seed0+fi*1000+ti*100,blocks=blocks)
+                rates[target_id]=sim.get('left_balanced_win_rate');diffs[target_id]=sim.get('avg_hp_diff_balanced')
+                del sim;gc.collect()
+            vals=[v for v in rates.values() if isinstance(v,(int,float))]
+            role_rows.append({'candidate':item['spec'],'structural_score':item['score'],'formal_status':item['formal_status'],'assignment':item['assignment'],'win_rates':rates,'hp_diffs':diffs,'min_win_rate':min(vals) if vals else None,'avg_win_rate':sum(vals)/len(vals) if vals else None})
+            placements_simulated+=1
+        role_rows.sort(key=_rank_key,reverse=True)
+        if not role_rows:continue
+        best=copy.deepcopy(role_rows[0])
+        expected=family_expected.get(family_key,6)
+        best['role_comparison']={'policy':'ALL_ROLE_ORDERS_COMMON_RANDOM_SEEDS','expected_placements':expected,'placements_simulated':len(role_rows),'complete':len(role_rows)==expected,'selected_rank':1}
+        best['role_variants']=role_rows
+        ranked.append(best)
+    ranked.sort(key=_rank_key,reverse=True)
+    scope={'search_mode':search_mode,'seed_count':len(seeds),'owned_pool_count':len(owned_pool),'swap_depth':swap_depth,'skill_swap_depth':skill_swap_depth,'confirmed_skill_pool_count':len(skill_pool),'skill_beam_width':beam_width,'skill_prefilter_basis':'adaptive exact 6-8 skills; beam 9+ using canonical optimizer_priority_score + optimizer_bucket','beam_recall_audit':beam_audit,'variant_count':variant_count,'generated':len(seen),'formal_ready':len(structural),'stopped':stopped,'budget':budget,'budget_cut':budget_cut,'units':units,'shortlist_simulated':placements_simulated,'trials_per_direction':trials,'blocks':blocks,'role_selection_policy':'ALL_SIX_ROLE_ORDERS_ATOMIC_COMMON_RANDOM_SEEDS','role_atomic_budget':True,'role_families_generated':len(families),'role_families_complete':len(complete_families),'role_families_shortlisted':len(family_shortlist),'role_placements_simulated':placements_simulated,'role_placements_expected_per_family':6}
+    return json.dumps({'type':'branch_optimizer','version':'adapter-v2-role-complete','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','claim_status':'PURPOSE_AWARE_BUDGETED_SEARCH_NO_GLOBAL_OPTIMUM_CLAIM','search_scope':scope,'targets':[t['id'] for t in targets],'ranked':ranked,'elapsed_seconds':round(time.time()-started,3)},ensure_ascii=False)
 
 # Stable public boundary. These aliases live outside the canonical b223 source.
 calculate = evaluate_request

@@ -19,7 +19,37 @@ print(json.dumps([json.loads(calculate(json.dumps(calc,ensure_ascii=False))),jso
    calculate_result,search_result,formal_result=json.loads(result.stdout)
    self.assertEqual(calculate_result['runtime'],'B223_CANONICAL_PYTHON_VIA_PYODIDE');self.assertEqual(calculate_result['win_rate'],0.25);self.assertEqual(calculate_result['hp_diff'],-7864.35)
    self.assertEqual(search_result['type'],'branch_optimizer');self.assertEqual(search_result['claim_status'],'PURPOSE_AWARE_BUDGETED_SEARCH_NO_GLOBAL_OPTIMUM_CLAIM')
+   self.assertEqual(search_result['version'],'adapter-v2-role-complete');self.assertTrue(search_result['search_scope']['role_atomic_budget'])
+   self.assertEqual(search_result['search_scope']['role_placements_simulated'],6);self.assertEqual(len(search_result['ranked']),1)
+   self.assertTrue(search_result['ranked'][0]['role_comparison']['complete']);self.assertEqual(len(search_result['ranked'][0]['role_variants']),6)
+   self.assertEqual(len({tuple(row['candidate']['officers']) for row in search_result['ranked'][0]['role_variants']}),6)
    self.assertEqual(formal_result['type'],'formal_recheck');self.assertEqual(formal_result['verification_level'],'1x1_BALANCED');self.assertEqual(formal_result['min_win_rate'],0.5)
+
+ def test_optimizer_admits_role_families_atomically_and_compares_all_six_with_common_seeds(self):
+  with tempfile.TemporaryDirectory() as td:
+   with tarfile.open(ROOT/'public/runtime_bundle_b223.tgz','r:gz') as tf:tf.extractall(td,filter='data')
+   code=r'''
+import json,sys
+sys.path.insert(0,'.')
+import browser_runtime_api as api
+calls=[]
+def fake_make(spec):
+ return {'formal_status':'FORMAL_EVAL_READY','score':100.0,'attach_assignment':[],'officers':list(spec['officers'])}
+def fake_sim(ctx,candidate,target,trials,seed,blocks):
+ calls.append({'officers':candidate['officers'],'seed':seed})
+ hp={'甲':200.0,'乙':900.0,'丙':500.0}.get(candidate['officers'][0],0.0)
+ return {'left_balanced_win_rate':0.5,'avg_hp_diff_balanced':hp}
+api._make=fake_make;api._ctx=lambda:{};api.simulate_many_balanced=fake_sim
+seed={'officers':['甲','乙','丙'],'awaken':[1,2,3],'unit':'騎馬','skills':['S1','S2','S3','S4','S5','S6'],'stats':[{'speed':1},{'speed':2},{'speed':3}]}
+target={'officers':['丁','戊','己'],'awaken':[0,0,0],'unit':'弓','skills':['T1','T2','T3','T4','T5','T6']}
+request={'seeds':[seed],'owned_pool':[],'swap_depth':0,'skill_pool':[{'name':'G'},{'name':'H'}],'skill_swap_depth':1,'structural_budget':50,'targets':[{'id':'target','spec':target}],'units':['騎馬'],'trials':1,'blocks':1,'role_family_shortlist':1,'seed':100}
+print(json.dumps({'result':json.loads(api.search(json.dumps(request,ensure_ascii=False))),'calls':calls},ensure_ascii=False))
+'''
+   process=subprocess.run([sys.executable,'-c',code],cwd=Path(td)/'02_ENGINE',text=True,capture_output=True,check=True)
+   payload=json.loads(process.stdout);result=payload['result'];scope=result['search_scope'];best=result['ranked'][0]
+   self.assertTrue(scope['budget_cut']);self.assertEqual(scope['generated'],48);self.assertEqual(scope['generated']%6,0)
+   self.assertEqual(scope['role_placements_simulated'],6);self.assertEqual(len(best['role_variants']),6);self.assertEqual(best['candidate']['officers'][0],'乙')
+   self.assertEqual(len({call['seed'] for call in payload['calls']}),1)
 
  def test_browser_worker_streams_a_balanced_batch_compact_detail_and_python_error(self):
   with tempfile.TemporaryDirectory() as td:

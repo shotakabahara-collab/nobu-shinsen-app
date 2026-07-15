@@ -29,6 +29,12 @@ test('opens on iPhone and presents visible image import, photo library and camer
  await warrior.fill('永久');
  await page.getByRole('option',{name:/松永久秀/}).click();
  await expect(page.getByLabel('大将 固有戦法')).toHaveValue('梟雄の計');
+ const deputy=page.getByRole('combobox',{name:'副将1 武将名'});
+ await deputy.fill('官兵衛');
+ await page.getByRole('option',{name:/黒田官兵衛/}).click();
+ await page.getByRole('combobox',{name:'大将に配置する武将'}).selectOption({label:'黒田官兵衛'});
+ await expect(page.getByRole('combobox',{name:'大将 武将名'})).toHaveValue('黒田官兵衛');
+ await expect(page.getByRole('combobox',{name:'副将1 武将名'})).toHaveValue('松永久秀');
  await expect(page.getByText('正本準拠の評価仕様に従い、兵力は各武将10,000固定です。')).toBeVisible();
  await expect(page.locator('body')).not.toContainText(/b223/i);
  await expect(page.getByRole('combobox',{name:'区分'})).toHaveCount(0);

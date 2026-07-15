@@ -13,7 +13,15 @@ export type CandidateSpec={
  unit_level?:number;
 };
 
-export type RankedRecommendation={
+export type RoleComparison={
+ policy?:string;
+ expected_placements?:number;
+ placements_simulated?:number;
+ complete?:boolean;
+ selected_rank?:number;
+};
+
+export type RoleVariant={
  candidate:CandidateSpec;
  min_win_rate?:number;
  avg_win_rate?:number;
@@ -24,13 +32,26 @@ export type RankedRecommendation={
  assignment?:unknown[];
 };
 
+export type RankedRecommendation=RoleVariant&{
+ role_comparison?:RoleComparison;
+ role_variants?:RoleVariant[];
+};
+
 export type SearchScope={
  generated?:number;
  budget?:number;
  budget_cut?:boolean;
  formal_ready?:number;
  shortlist_simulated?:number;
+ role_atomic_budget?:boolean;
+ role_families_generated?:number;
+ role_families_complete?:number;
+ role_families_shortlisted?:number;
+ role_placements_simulated?:number;
+ role_placements_expected_per_family?:number;
 };
+
+export const roleLabels=['大将','副将1','副将2'] as const;
 
 function tupleOfStrings(value:unknown,length:number):string[]|null{
  if(!Array.isArray(value)||value.length!==length||value.some(item=>typeof item!=='string'||!item.trim()))return null;
@@ -66,22 +87,31 @@ export function getRankedRecommendations(result:RuntimeResult|null):RankedRecomm
  if(!result||!Array.isArray(result.ranked))return [];
  const recommendations:RankedRecommendation[]=[];
  for(const raw of result.ranked){
-  if(!raw||typeof raw!=='object')continue;
+  const item=parseRoleVariant(raw);
+  if(!item)continue;
   const row=raw as Record<string,unknown>;
-  const candidate=parseCandidateSpec(row.candidate);
-  if(!candidate)continue;
-  recommendations.push({
-   candidate,
-   min_win_rate:typeof row.min_win_rate==='number'?row.min_win_rate:undefined,
-   avg_win_rate:typeof row.avg_win_rate==='number'?row.avg_win_rate:undefined,
-   win_rates:row.win_rates&&typeof row.win_rates==='object'?row.win_rates as Record<string,number>:undefined,
-   hp_diffs:row.hp_diffs&&typeof row.hp_diffs==='object'?row.hp_diffs as Record<string,number>:undefined,
-   structural_score:typeof row.structural_score==='number'?row.structural_score:undefined,
-   formal_status:typeof row.formal_status==='string'?row.formal_status:undefined,
-   assignment:Array.isArray(row.assignment)?row.assignment:undefined,
-  });
+  const comparison=row.role_comparison&&typeof row.role_comparison==='object'?row.role_comparison as RoleComparison:undefined;
+  const roleVariants=Array.isArray(row.role_variants)?row.role_variants.map(parseRoleVariant).filter((value):value is RoleVariant=>Boolean(value)):undefined;
+  recommendations.push({...item,role_comparison:comparison,role_variants:roleVariants});
  }
  return recommendations;
+}
+
+function parseRoleVariant(raw:unknown):RoleVariant|null{
+ if(!raw||typeof raw!=='object')return null;
+ const row=raw as Record<string,unknown>;
+ const candidate=parseCandidateSpec(row.candidate);
+ if(!candidate)return null;
+ return {
+  candidate,
+  min_win_rate:typeof row.min_win_rate==='number'?row.min_win_rate:undefined,
+  avg_win_rate:typeof row.avg_win_rate==='number'?row.avg_win_rate:undefined,
+  win_rates:row.win_rates&&typeof row.win_rates==='object'?row.win_rates as Record<string,number>:undefined,
+  hp_diffs:row.hp_diffs&&typeof row.hp_diffs==='object'?row.hp_diffs as Record<string,number>:undefined,
+  structural_score:typeof row.structural_score==='number'?row.structural_score:undefined,
+  formal_status:typeof row.formal_status==='string'?row.formal_status:undefined,
+  assignment:Array.isArray(row.assignment)?row.assignment:undefined,
+ };
 }
 
 export function getSearchScope(result:RuntimeResult|null):SearchScope{
@@ -94,11 +124,13 @@ export function buildRecommendationReasons(item:RankedRecommendation,index:numbe
  const reasons:string[]=[];
  const targetRate=item.win_rates?.[targetId];
  const measured=typeof targetRate==='number'?targetRate:item.avg_win_rate??item.min_win_rate;
- reasons.push(`${ENGINE_DISPLAY_NAME}の対象勝率・平均勝率・構造スコアによる順位付けで、評価済み候補中${index+1}位です。`);
+ reasons.push(`${ENGINE_DISPLAY_NAME}の対象勝率・平均勝率・残存兵力差・構造スコアによる順位付けで、評価済み候補中${index+1}位です。`);
  if(typeof measured==='number')reasons.push(`選択した編成に対する計測勝率は${percent(measured)}です。`);
  const hp=item.hp_diffs?.[targetId];
  if(typeof hp==='number')reasons.push(`平均HP差は${hp>=0?'+':''}${hp.toFixed(1)}で、勝敗だけでなく残存兵力差も評価しています。`);
  if(item.formal_status?.startsWith('FORMAL_EVAL_READY'))reasons.push('正本データとの整合性確認を通過した候補です。');
+ if(item.role_comparison?.complete)reasons.push(`同じ3武将の大将・副将全${item.role_comparison.placements_simulated??6}配置を同一乱数条件で比較し、最良の役割順を選定しています。`);
+ else if(typeof item.role_comparison?.placements_simulated==='number')reasons.push(`役割配置は${item.role_comparison.placements_simulated}件を比較しましたが、正本条件を満たさない配置は除外しています。`);
  if(typeof scope.generated==='number')reasons.push(`${scope.generated}件を生成し、${scope.shortlist_simulated??0}件を実戦シミュレーションした範囲から選定しています。`);
  if(scope.budget_cut)reasons.push('探索予算で打ち切っているため、大域的な絶対最適を保証するものではありません。');
  else reasons.push('設定された探索範囲は完走していますが、未登録の武将・戦法は探索対象外です。');
@@ -106,7 +138,24 @@ export function buildRecommendationReasons(item:RankedRecommendation,index:numbe
 }
 
 export function candidateSkillLines(candidate:CandidateSpec):string[]{
- return candidate.officers.map((officer,index)=>`${officer}：${candidate.skills[index*2]}／${candidate.skills[index*2+1]}`);
+ return candidate.officers.map((officer,index)=>`${roleLabels[index]} ${officer}：${candidate.skills[index*2]}／${candidate.skills[index*2+1]}`);
+}
+
+export function swapCandidateRoles(candidate:CandidateSpec,first:number,second:number):CandidateSpec{
+ if(first===second||first<0||first>2||second<0||second>2)return candidate;
+ const officers=[...candidate.officers] as CandidateSpec['officers'];
+ const awaken=[...candidate.awaken] as CandidateSpec['awaken'];
+ const skillPairs=[candidate.skills.slice(0,2),candidate.skills.slice(2,4),candidate.skills.slice(4,6)];
+ [officers[first],officers[second]]=[officers[second]!,officers[first]!];
+ [awaken[first],awaken[second]]=[awaken[second]!,awaken[first]!];
+ [skillPairs[first],skillPairs[second]]=[skillPairs[second]!,skillPairs[first]!];
+ return {...candidate,officers,awaken,skills:skillPairs.flat() as CandidateSpec['skills']};
+}
+
+export function recommendationForRoleOrder(item:RankedRecommendation,candidate:CandidateSpec):RankedRecommendation{
+ const key=JSON.stringify([candidate.officers,candidate.awaken,candidate.skills,candidate.unit]);
+ const match=item.role_variants?.find(variant=>JSON.stringify([variant.candidate.officers,variant.candidate.awaken,variant.candidate.skills,variant.candidate.unit])===key);
+ return match?{...match,role_comparison:item.role_comparison,role_variants:item.role_variants}:{candidate,role_comparison:item.role_comparison,role_variants:item.role_variants};
 }
 
 export function nextRecommendationName(targetName:string,existingNames:readonly string[],rank:number):string{

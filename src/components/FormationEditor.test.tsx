@@ -51,6 +51,16 @@ describe('FormationEditor',()=>{
   expect(screen.getByText(/各武将10,000固定/)).toBeVisible();
  });
 
+ it('swaps commander and deputy with the full officer package',()=>{
+  const value=completeFormation();
+  render(editor({initial:value,canonicalOfficers:[],canonicalSkills:[]}));
+  fireEvent.change(screen.getByRole('combobox',{name:'大将に配置する武将'}),{target:{value:value.warriors[2].id}});
+  expect(screen.getByRole('combobox',{name:'大将 武将名'})).toHaveValue('武将3');
+  expect(screen.getByRole('combobox',{name:'大将 装着戦法1'})).toHaveValue('戦法5');
+  expect(screen.getByRole('combobox',{name:'副将2 武将名'})).toHaveValue('武将1');
+  expect(screen.getByRole('combobox',{name:'副将2 装着戦法2'})).toHaveValue('戦法2');
+ });
+
  it('automatically calculates troop level from troop type, officer and limit break',async()=>{
   render(editor());
   const level=screen.getByRole('spinbutton',{name:'兵種Lv'});
