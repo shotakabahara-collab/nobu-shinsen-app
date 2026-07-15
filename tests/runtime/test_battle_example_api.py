@@ -47,4 +47,13 @@ class BattleExampleApiTest(unittest.TestCase):
   self.assertEqual(change['side'],'B')
   self.assertEqual(self.api._replace_sides('A:黒田官兵衛 -> B:山本勘助','reverse'),'B:黒田官兵衛 -> A:山本勘助')
 
+ def test_canonical_runtime_can_generate_one_eight_turn_example(self):
+  candidate=self.api._make({'officers':['山本勘助','柴田勝家','柿崎景家'],'awaken':[2,1,2],'unit':'騎馬','unit_level':10,'troops':10000,'skills':['一行三昧','回天転運','会盟の陣','以戦養戦','乗勝追撃','縦横馳突'],'fixed_placement':True,'ignore_formal_overlap':True})
+  target=self.api._make({'officers':['黒田官兵衛','豊臣秀吉','ねね'],'awaken':[3,1,3],'unit':'弓','unit_level':10,'troops':10000,'skills':['七十二の計','紅蓮の炎','三河弓兵隊','嚢沙之計','罵詈雑言','沈魚落雁'],'fixed_placement':True,'ignore_formal_overlap':True})
+  example=self.api._build_example(candidate,target,'forward',1326230000,'win')
+  self.assertEqual(len(example['turns']),8)
+  self.assertEqual([turn['turn'] for turn in example['turns']],list(range(1,9)))
+  self.assertTrue(any(turn['actions'] for turn in example['turns']))
+  self.assertTrue(all('startTroops' in turn and 'endTroops' in turn for turn in example['turns']))
+
 if __name__=='__main__':unittest.main()
