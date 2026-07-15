@@ -1,6 +1,6 @@
 import {expect,test} from '@playwright/test';
 
-test.setTimeout(300_000);
+test.setTimeout(600_000);
 
 const now='2026-07-13T00:00:00.000Z';
 const warrior=(id:string,name:string,limitBreak:number,equippedSkills:[string,string])=>({id,name,limitBreak,inherentSkill:'固有戦法',equippedSkills});
@@ -24,7 +24,7 @@ const backup={
  ],
 };
 
-test('runs the real canonical calculate flow in an iPhone WebKit environment',async({page})=>{
+test('runs the real 100-battle canonical flow in an iPhone WebKit environment',async({page})=>{
  await page.goto('./');
  await expect(page.getByRole('heading',{name:'NOBU Companion'})).toBeVisible();
  await expect(page.getByText('正本準拠シミュレーション',{exact:true})).toBeVisible();
@@ -40,10 +40,15 @@ test('runs the real canonical calculate flow in an iPhone WebKit environment',as
  await page.getByRole('button',{name:'対戦・提案'}).click();
  await page.getByLabel('編成A').selectOption(backup.formations[0].id);
  await page.getByLabel('編成B').selectOption(backup.formations[1].id);
- await page.getByRole('button',{name:'10×1で対戦'}).click();
- await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
+ await page.getByRole('button',{name:'100戦で対戦'}).click();
+ await expect(page.getByText('山本騎馬と黒田弓の100戦計算が完了しました',{exact:true})).toBeVisible({timeout:540_000});
  await expect(page.getByText('山本騎馬の勝率')).toBeVisible();
  await expect(page.getByText('正本準拠エンジンで計算済み',{exact:true})).toBeVisible();
  await expect(page.locator('body')).not.toContainText(/b223/i);
- await expect(page.getByText(/^HP差 /)).toBeVisible();
+ await expect(page.getByText(/HP差.*100戦/)).toBeVisible();
+ const battleLog=page.getByRole('button',{name:/山本騎馬 vs 黒田弓/});
+ await expect(battleLog).toContainText('100戦');
+ await battleLog.click();
+ await expect(page.getByRole('region',{name:'100戦結果'}).getByText('100戦の勝率')).toBeVisible();
+ await expect(page.getByRole('region',{name:'戦闘例'})).toBeVisible();
 });

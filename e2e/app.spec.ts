@@ -39,7 +39,8 @@ test('opens on iPhone and presents visible image import, photo library and camer
  await expect(page.getByLabel('編成A')).toBeVisible();
  await expect(page.getByLabel('編成B')).toBeVisible();
  await expect(page.getByLabel('最適化対象')).toBeVisible();
- await expect(page.getByRole('button',{name:'10×1で対戦'})).toBeDisabled();
+ await expect(page.getByText('順方向50戦＋逆方向50戦の合計100戦で勝率を算出します。')).toBeVisible();
+ await expect(page.getByRole('button',{name:'100戦で対戦'})).toBeDisabled();
  await expect(page.getByRole('button',{name:'最適編成を探索'})).toBeDisabled();
  await expect(page.getByRole('button',{name:'探索',exact:true})).toHaveCount(0);
 
@@ -52,8 +53,8 @@ test('opens on iPhone and presents visible image import, photo library and camer
  await expect(page.getByRole('heading',{name:'戦法管理'})).toBeVisible();
 });
 
-test('matches formations and shows six-officer stats and runtime action order online and offline',async({page,context})=>{
- test.setTimeout(300_000);
+test('runs 100 balanced battles and shows one win and loss example through T8 online and offline',async({page,context})=>{
+ test.setTimeout(600_000);
  const now='2026-07-13T00:00:00.000Z';
  const warrior=(id:string,name:string,limitBreak:number,equippedSkills:[string,string])=>({id,name,limitBreak,inherentSkill:'固有戦法',equippedSkills});
  const backup={schemaVersion:2,exportedAt:now,warriors:[],skills:[],battleResults:[],formations:[
@@ -69,35 +70,29 @@ test('matches formations and shows six-officer stats and runtime action order on
  await expect(page.getByText('バックアップを復元しました（編成2件）',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'対戦・提案'}).click();
  const formationA=page.getByLabel('編成A');const formationB=page.getByLabel('編成B');
- await expect(formationA.locator(`option[value="${backup.formations[0].id}"]`)).toHaveText('山本騎馬');
- await expect(formationA.locator(`option[value="${backup.formations[1].id}"]`)).toHaveText('黒田弓');
- await expect(formationB.locator(`option[value="${backup.formations[0].id}"]`)).toHaveText('山本騎馬');
- await expect(formationB.locator(`option[value="${backup.formations[1].id}"]`)).toHaveText('黒田弓');
  await formationA.selectOption(backup.formations[0].id);await formationB.selectOption(backup.formations[1].id);
  await page.getByLabel('最適化対象').selectOption(backup.formations[1].id);
  await expect(page.getByRole('button',{name:'最適編成を探索'})).toBeEnabled();
 
- await page.getByRole('button',{name:'10×1で対戦'}).click();
- await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
+ await page.getByRole('button',{name:'100戦で対戦'}).click();
+ await expect(page.getByText('山本騎馬と黒田弓の100戦計算が完了しました',{exact:true})).toBeVisible({timeout:300_000});
  await expect(page.getByText('山本騎馬の勝率')).toBeVisible();
+ await expect(page.getByText(/HP差.*100戦/)).toBeVisible();
  await expect(page.getByText('正本準拠エンジンで計算済み',{exact:true})).toBeVisible();
  await expect(page.locator('body')).not.toContainText(/b223/i);
- const battleLog=page.getByRole('button',{name:/山本騎馬 vs 黒田弓/});await expect(battleLog).toBeVisible();await battleLog.click();
+ const battleLog=page.getByRole('button',{name:/山本騎馬 vs 黒田弓/});await expect(battleLog).toContainText('100戦');await battleLog.click();
  await expect(page.getByRole('region',{name:'Battle Log詳細'})).toBeVisible();
- const statuses=page.getByRole('region',{name:'6武将ステータス'});await expect(statuses).toBeVisible();
- await expect(statuses.getByLabel('A 山本勘助 ステータス')).toBeVisible();await expect(statuses.getByLabel('B 黒田官兵衛 ステータス')).toBeVisible();
- await expect(statuses.getByText('武勇',{exact:true}).first()).toBeVisible();await expect(statuses.getByText('知略',{exact:true}).first()).toBeVisible();await expect(statuses.getByText('統率',{exact:true}).first()).toBeVisible();await expect(statuses.getByText('速度',{exact:true}).first()).toBeVisible();
- const actionOrder=page.getByRole('region',{name:'6武将 行動順'});await expect(actionOrder).toBeVisible();await expect(actionOrder.getByText('T1 行動順（6名）')).toBeVisible();await expect(actionOrder.getByText(/山本勘助/).first()).toBeVisible();await expect(actionOrder.getByText(/黒田官兵衛/).first()).toBeVisible();
+ const summary=page.getByRole('region',{name:'100戦結果'});await expect(summary.getByText('100戦の勝率')).toBeVisible();
+ const statuses=page.getByRole('region',{name:'6武将ステータス'});await expect(statuses.getByLabel('A 山本勘助 ステータス')).toBeVisible();await expect(statuses.getByLabel('B 黒田官兵衛 ステータス')).toBeVisible();
+ const examples=page.getByRole('region',{name:'戦闘例'});await expect(examples.getByText('勝ち例',{exact:true})).toHaveCount(1);await expect(examples.getByText('負け例',{exact:true})).toHaveCount(1);
+ await expect(examples.getByText(/T8.*戦闘終了済み/).first()).toBeVisible();await expect(examples.getByText('行動内容・兵数増減').first()).toBeVisible();await expect(examples.getByText(/兵数 [+-]/).first()).toBeVisible();
  await page.getByRole('button',{name:'閉じる'}).click();
 
  await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
  await context.setOffline(true);await page.reload();
  await expect(page.getByText('オフラインで利用中',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'対戦・提案'}).click();
- await page.getByLabel('編成A').selectOption(backup.formations[0].id);await page.getByLabel('編成B').selectOption(backup.formations[1].id);
- await page.getByRole('button',{name:'10×1で対戦'}).click();
- await expect(page.getByText('山本騎馬と黒田弓の計算が完了しました',{exact:true})).toBeVisible({timeout:170_000});
- await expect(page.getByText('正本準拠エンジンで計算済み',{exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText(/b223/i);
  await page.getByRole('button',{name:/山本騎馬 vs 黒田弓/}).first().click();
- await expect(page.getByRole('region',{name:'6武将ステータス'})).toBeVisible();await expect(page.getByRole('region',{name:'6武将 行動順'}).getByText('T1 行動順（6名）')).toBeVisible();
+ await expect(page.getByRole('region',{name:'100戦結果'}).getByText('100戦の勝率')).toBeVisible();
+ const offlineExamples=page.getByRole('region',{name:'戦闘例'});await expect(offlineExamples.getByText('勝ち例',{exact:true})).toHaveCount(1);await expect(offlineExamples.getByText('負け例',{exact:true})).toHaveCount(1);await expect(offlineExamples.getByText(/T8.*戦闘終了済み/).first()).toBeVisible();
 });

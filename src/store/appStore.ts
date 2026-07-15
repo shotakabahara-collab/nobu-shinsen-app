@@ -6,6 +6,15 @@ type State={formations:Formation[];warriors:WarriorRecord[];skills:SkillRecord[]
 
 export function storageErrorMessage(error:unknown,operation:string){return `${operation}に失敗しました${error instanceof Error&&error.message?`: ${error.message}`:''}`;}
 
+function completedBattleCount(value:BattleResult):number{
+ const evaluation=value.payload.battle_evaluation;
+ if(!evaluation||typeof evaluation!=='object'||Array.isArray(evaluation))return value.trials;
+ const summary=(evaluation as Record<string,unknown>).summary;
+ if(!summary||typeof summary!=='object'||Array.isArray(summary))return value.trials;
+ const completed=(summary as Record<string,unknown>).completedBattles;
+ return typeof completed==='number'&&Number.isInteger(completed)&&completed>0?completed:value.trials;
+}
+
 export const useAppStore=create<State>((set,get)=>{
  async function mutate(operation:string,action:()=>Promise<unknown>){
   set({error:null});
@@ -22,7 +31,7 @@ export const useAppStore=create<State>((set,get)=>{
   removeWarrior:id=>mutate('武将の削除',()=>db.warriors.delete(id)),
   saveSkill:value=>mutate('戦法の保存',()=>db.skills.put(value)),
   removeSkill:id=>mutate('戦法の削除',()=>db.skills.delete(id)),
-  saveBattleResult:value=>mutate('Battle Logの保存',()=>db.battleResults.put(value)),
+  saveBattleResult:value=>mutate('Battle Logの保存',()=>db.battleResults.put({...value,trials:completedBattleCount(value)})),
   replaceAll:value=>mutate('バックアップの復元',()=>db.transaction('rw',db.formations,db.warriors,db.skills,db.battleResults,async()=>{await Promise.all([db.formations.clear(),db.warriors.clear(),db.skills.clear(),db.battleResults.clear()]);await db.formations.bulkPut(value.formations);await db.warriors.bulkPut(value.warriors);await db.skills.bulkPut(value.skills);await db.battleResults.bulkPut(value.battleResults);})),
  };
 });
