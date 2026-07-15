@@ -62,6 +62,9 @@ def _run_direction(ctx,candidate,target,direction,seed_start,required=50):
         attempts+=1
         try:
             result=simulate_once(ctx,copy.deepcopy(left),copy.deepcopy(right),seed=current_seed,verbose=False,trace_enabled=False,runtime_mode='outcome_only')
+        except MemoryError:
+            gc.collect()
+            raise
         except Exception as error:
             failures.append({'seed':current_seed,'error':str(error)[:300]})
             continue
@@ -74,15 +77,39 @@ def _run_direction(ctx,candidate,target,direction,seed_start,required=50):
         outcome=_candidate_outcome(direction,winner)
         if not any(row['outcome']==outcome for row in samples):
             samples.append({'direction':direction,'seed':current_seed,'outcome':outcome,'winner':winner})
-        if len(candidate_hp)%10==0: gc.collect()
+        if len(candidate_hp)%5==0: gc.collect()
     if len(candidate_hp)<required:
-        raise RuntimeError(f'{direction}の正本試行を{required}戦完了できませんでした（完了{len(candidate_hp)}戦／試行{attempts}回）')
+        first_error=failures[0]['error'] if failures else '詳細なし'
+        raise RuntimeError(f'{direction}の正本試行を{required}戦完了できませんでした（完了{len(candidate_hp)}戦／試行{attempts}回／最初の例外: {first_error}）')
+    raw_hp=[hp if direction=='forward' else -hp for hp in candidate_hp]
     return {
         'trials':required,'completed_trials':required,'left_wins':left_wins,'right_wins':right_wins,'draws':draws,
         'left_win_rate':left_wins/required,'right_win_rate':right_wins/required,
-        'avg_hp_diff':sum((hp if direction=='forward' else -hp) for hp in candidate_hp)/required,
-        'candidate_hp':candidate_hp,'samples':samples,'runtime_failures':failures,
+        'avg_hp_diff':sum(raw_hp)/required,'candidate_hp_sum':sum(candidate_hp),'raw_hp_sum':sum(raw_hp),
+        'next_seed':seed+attempts,'candidate_hp':candidate_hp,'samples':samples,'runtime_failures':failures,
     }
+
+def _batch_direction_public(value):
+    return {key:value[key] for key in (
+        'trials','completed_trials','left_wins','right_wins','draws','left_win_rate','right_win_rate',
+        'avg_hp_diff','candidate_hp_sum','raw_hp_sum','next_seed','samples','runtime_failures'
+    )}
+
+def calculate_batch(request_json):
+    req=json.loads(request_json) if isinstance(request_json,str) else dict(request_json)
+    required=max(1,min(10,int(req.get('trials') or 10)))
+    forward_seed=int(req.get('forward_seed',req.get('seed',1326230000)))
+    reverse_seed=int(req.get('reverse_seed',int(req.get('seed',1326230000))+5003))
+    ctx=_ctx();candidate=_make(req['candidate']);target=_make(req.get('target_spec') or TARGETS[req['target']])
+    forward=_run_direction(ctx,candidate,target,'forward',forward_seed,required)
+    reverse=_run_direction(ctx,candidate,target,'reverse',reverse_seed,required)
+    payload={
+        'type':'simulation_batch','version':'batch-v1-isolated-worker','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE',
+        'trials_per_direction':required,'forward':_batch_direction_public(forward),'reverse':_batch_direction_public(reverse),
+        'candidate_assignment':candidate.get('attach_assignment'),'formal_status':candidate.get('formal_status'),
+    }
+    gc.collect()
+    return json.dumps(payload,ensure_ascii=False)
 
 def calculate_100(request_json):
     req=json.loads(request_json) if isinstance(request_json,str) else dict(request_json)
@@ -127,4 +154,4 @@ def calculate_100(request_json):
     }
     return json.dumps(payload,ensure_ascii=False)
 `);ready=true;self.postMessage({type:'ready'});}
-self.onmessage=async(event)=>{const msg=event.data||{};try{await init(msg.bundleUrl);pyodide.globals.set('request_json_js',JSON.stringify(msg.request));const fn={calculate:'calculate_100',search:'search',formal:'formal',detail:'detail'}[msg.type];if(!fn)throw new Error(`unknown operation: ${msg.type}`);const raw=await pyodide.runPythonAsync(`${fn}(request_json_js)`);self.postMessage({type:'result',requestId:msg.requestId,result:JSON.parse(raw)});}catch(error){self.postMessage({type:'error',requestId:msg.requestId,message:error?.stack||String(error)});}};
+self.onmessage=async(event)=>{const msg=event.data||{};try{await init(msg.bundleUrl);pyodide.globals.set('request_json_js',JSON.stringify(msg.request));const fn={calculate:'calculate_100',calculateBatch:'calculate_batch',search:'search',formal:'formal',detail:'detail'}[msg.type];if(!fn)throw new Error(`unknown operation: ${msg.type}`);const raw=await pyodide.runPythonAsync(`${fn}(request_json_js)`);self.postMessage({type:'result',requestId:msg.requestId,result:JSON.parse(raw)});}catch(error){self.postMessage({type:'error',requestId:msg.requestId,message:error?.stack||String(error)});}};

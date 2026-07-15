@@ -14,7 +14,7 @@
 
 `canonical/NOBU_ONE_v1326p15e2b223.zip` is immutable input. The build script verifies its archive and battle runtime hashes, extracts it to a temporary directory, and overlays only `runtime/adapter/browser_runtime_api.py`. The canonical archive is never rewritten.
 
-Public operations are `calculate`, `search`, and `formal`. TypeScript validates and maps application formations before sending requests to the isolated Web Worker.
+Public operations are `calculate`, `search`, and `formal`. The 100-battle calculate path invokes an internal `calculateBatch` lane for 10 forward and 10 reverse battles at a time, terminates that Pyodide worker, and repeats until 50+50 canonical `simulate_once` results are complete. Win/loss detail traces run in separate fresh workers. TypeScript validates and maps application formations before every request.
 
 The release lock in `canonical/LOCK.json` pins the canonical archive, battle runtime, and generated runtime bundle hashes. Build, Python integrity tests, offline asset verification, and the post-deploy Pages smoke test all read or validate the same release lock. A bundle hash drift fails the build.
 
@@ -30,10 +30,10 @@ The release lock in `canonical/LOCK.json` pins the canonical archive, battle run
 
 ## Browser verification
 
-- Chromium iPhone viewport verifies import, IndexedDB persistence, online b223 calculation, complete offline reload, offline b223 recalculation, runtime identity, and Battle Log.
-- WebKit iPhone environment verifies import and real b223 calculation through vendored Pyodide.
+- Chromium iPhone viewport verifies import, IndexedDB persistence, online 100-battle calculation, complete offline reload, runtime identity, and the saved Battle Log.
+- WebKit iPhone environment verifies the real 50+50 calculation through recycled vendored-Pyodide workers.
 - Service Worker and full offline automation remain on Chromium because Playwright Service Worker routing and inspection are Chromium-specific.
-- Physical iPhone Safari, home-screen installation, standalone launch, and airplane-mode use remain unverified until measured on the deployed Pages build.
+- The recycled-worker fix remains subject to final physical-iPhone confirmation on the deployed Pages build; CI cannot claim the device memory gate from desktop WebKit alone.
 
 ## CI release gates
 

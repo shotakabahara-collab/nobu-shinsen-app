@@ -75,7 +75,7 @@ test('runs 100 balanced battles and shows one win and loss example through T8 on
  await expect(page.getByRole('button',{name:'最適編成を探索'})).toBeEnabled();
 
  await page.getByRole('button',{name:'100戦で対戦'}).click();
- await expect(page.getByText('山本騎馬と黒田弓の100戦計算が完了しました',{exact:true})).toBeVisible({timeout:300_000});
+ await expect(page.getByText('山本騎馬と黒田弓の100戦計算が完了しました',{exact:true})).toBeVisible({timeout:420_000});
  await expect(page.getByText('山本騎馬の勝率')).toBeVisible();
  await expect(page.getByText(/HP差.*100戦/)).toBeVisible();
  await expect(page.getByText('正本準拠エンジンで計算済み',{exact:true})).toBeVisible();
