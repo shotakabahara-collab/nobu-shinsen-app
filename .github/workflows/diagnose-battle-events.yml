@@ -10,10 +10,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 scripts/build_runtime_bundle.py >/dev/null
-      - name: Export 100-battle trace structure
+      - name: Export 100-battle trace structure and sources
         run: |
           python3 - <<'PY'
-          import json,sys,tarfile,tempfile
+          import json,sys,tarfile,tempfile,shutil
           from pathlib import Path
           root=Path.cwd()
           with tempfile.TemporaryDirectory() as td:
@@ -27,15 +27,14 @@ jobs:
               'trials':100,'blocks':1,'seed':1326230000,'include_detail':True,
             }
             result=json.loads(api.evaluate_request(request))
-            def prune(value,depth=0):
-              if depth>10:return type(value).__name__
-              if isinstance(value,dict):return {str(k):prune(v,depth+1) for k,v in value.items()}
-              if isinstance(value,list):return [prune(v,depth+1) for v in value[:30]]
-              if isinstance(value,(str,int,float,bool)) or value is None:return value
-              return str(value)
-            (root/'battle-events-diagnostic.json').write_text(json.dumps(prune(result),ensure_ascii=False,indent=2),encoding='utf-8')
+            (root/'battle-events-diagnostic.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
+            shutil.copy2(engine/'battle_simulator.py',root/'battle-simulator-diagnostic.py')
+            shutil.copy2(engine/'browser_runtime_api.py',root/'browser-runtime-api-diagnostic.py')
           PY
       - uses: actions/upload-artifact@v4
         with:
           name: battle-events-diagnostic
-          path: battle-events-diagnostic.json
+          path: |
+            battle-events-diagnostic.json
+            battle-simulator-diagnostic.py
+            browser-runtime-api-diagnostic.py
