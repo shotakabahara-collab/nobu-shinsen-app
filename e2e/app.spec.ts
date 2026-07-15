@@ -12,29 +12,17 @@ test('opens on iPhone and presents visible image import, photo library and camer
  expect((await request.get('/nobu-shinsen-app/canonical_officer_stats_catalog.json')).ok()).toBe(true);
  expect((await request.get('/nobu-shinsen-app/canonical_skill_catalog.json')).ok()).toBe(true);
  expect((await request.get('/nobu-shinsen-app/battle-example-api.py')).ok()).toBe(true);
-
- const imageEntry=page.getByRole('button',{name:'画像から編成登録'});
- await expect(imageEntry).toBeVisible();await imageEntry.click();
+ const imageEntry=page.getByRole('button',{name:'画像から編成登録'});await expect(imageEntry).toBeVisible();await imageEntry.click();
  await expect(page.getByRole('region',{name:'画像から編成を読み込む'})).toBeVisible();
  await expect(page.getByText('写真ライブラリ・カメラ・画像の貼り付けに対応')).toBeVisible();
- await expect(page.getByRole('button',{name:'写真ライブラリから選ぶ'})).toBeVisible();
- await expect(page.getByRole('button',{name:'カメラで撮影'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'写真ライブラリから選ぶ'})).toBeVisible();await expect(page.getByRole('button',{name:'カメラで撮影'})).toBeVisible();
  const libraryInput=page.getByLabel('写真ライブラリから画像を選択');const cameraInput=page.getByLabel('カメラで画像を撮影');
- await expect(libraryInput).toHaveAttribute('multiple','');await expect(libraryInput).not.toHaveAttribute('capture');
- await expect(cameraInput).toHaveAttribute('capture','environment');await expect(cameraInput).not.toHaveAttribute('multiple');
+ await expect(libraryInput).toHaveAttribute('multiple','');await expect(libraryInput).not.toHaveAttribute('capture');await expect(cameraInput).toHaveAttribute('capture','environment');await expect(cameraInput).not.toHaveAttribute('multiple');
  const warrior=page.getByRole('combobox',{name:'大将 武将名'});await warrior.fill('永久');await page.getByRole('option',{name:/松永久秀/}).click();
- await expect(page.getByLabel('大将 固有戦法')).toHaveValue('梟雄の計');
- await expect(page.getByText('正本準拠の評価仕様に従い、兵力は各武将10,000固定です。')).toBeVisible();
+ await expect(page.getByLabel('大将 固有戦法')).toHaveValue('梟雄の計');await expect(page.getByText('正本準拠の評価仕様に従い、兵力は各武将10,000固定です。')).toBeVisible();
  await expect(page.locator('body')).not.toContainText(/b223/i);await expect(page.getByRole('combobox',{name:'区分'})).toHaveCount(0);await page.getByRole('button',{name:'キャンセル'}).click();
-
- await page.getByRole('button',{name:'対戦・提案'}).click();
- await expect(page.getByRole('heading',{name:'対戦・最適編成'})).toBeVisible();
- await expect(page.getByRole('button',{name:'100戦で対戦'})).toBeDisabled();
- await expect(page.getByRole('button',{name:'最適編成を探索'})).toBeDisabled();
- await page.getByRole('button',{name:'データ'}).click();
- await expect(page.getByRole('region',{name:'PWA実機診断'})).toBeVisible();
- await expect(page.getByText('オンラインで正本準拠計算')).toBeVisible();
- await expect(page.getByRole('heading',{name:'武将管理'})).toBeVisible();await expect(page.getByRole('heading',{name:'戦法管理'})).toBeVisible();
+ await page.getByRole('button',{name:'対戦・提案'}).click();await expect(page.getByRole('heading',{name:'対戦・最適編成'})).toBeVisible();await expect(page.getByRole('button',{name:'100戦で対戦'})).toBeDisabled();await expect(page.getByRole('button',{name:'最適編成を探索'})).toBeDisabled();
+ await page.getByRole('button',{name:'データ'}).click();await expect(page.getByRole('region',{name:'PWA実機診断'})).toBeVisible();await expect(page.getByText('オンラインで正本準拠計算')).toBeVisible();await expect(page.getByRole('heading',{name:'武将管理'})).toBeVisible();await expect(page.getByRole('heading',{name:'戦法管理'})).toBeVisible();
 });
 
 test('shows 100-run win-loss examples, T1-T8 actions and troop changes online and offline',async({page,context})=>{
@@ -55,25 +43,10 @@ test('shows 100-run win-loss examples, T1-T8 actions and troop changes online an
  const payload={battle_snapshot:battleSnapshot,battle_examples:{schemaVersion:1,trialsPerDirection:50,directions:2,completedTrials:100,candidateWins:60,candidateLosses:40,draws:0,selectionPolicy:'test',examples:[example('win',100),example('loss',200)]}};
  const battleResult={id:'00000000-0000-4000-8000-000000000003',allyId:formations[0].id,enemyId:formations[1].id,createdAt:now,status:'completed',winRate:.6,hpDiff:100,trials:50,blocks:1,runtime:'runtime',payload};
  const backup={schemaVersion:2,exportedAt:now,warriors:[],skills:[],formations,battleResults:[battleResult]};
-
- await page.goto('./');await page.getByRole('button',{name:'データ'}).click();
- await page.locator('input[type="file"]').setInputFiles({name:'battle-log-e2e.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
- await expect(page.getByText('バックアップを復元しました（編成2件）',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'対戦・提案'}).click();
- await expect(page.getByRole('button',{name:'100戦で対戦'})).toBeEnabled();
- await page.getByRole('button',{name:/山本騎馬 vs 黒田弓/}).click();
- await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('60.0%');
- await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('完了100試行');
- const examples=page.getByRole('region',{name:'勝敗別戦闘例'});await expect(examples).toBeVisible();
- await expect(examples.getByRole('button',{name:'勝ち例1'})).toBeVisible();await expect(examples.getByRole('button',{name:'負け例1'})).toBeVisible();
- await expect(examples.getByRole('button',{name:'勝ち例2'})).toHaveCount(0);await expect(examples.getByRole('button',{name:'負け例2'})).toHaveCount(0);
- await expect(examples.getByText('T1',{exact:true})).toBeVisible();await expect(examples.getByText('T8',{exact:true})).toBeVisible();
- await expect(examples.getByText(/通常攻撃 -> B:黒田官兵衛 1000/)).toBeVisible();
- await expect(examples.getByText(/10,000 → 9,000/)).toBeVisible();
- await examples.getByRole('button',{name:'負け例1'}).click();await expect(examples.getByText(/seed 200/)).toBeVisible();
- await page.getByRole('button',{name:'閉じる'}).click();
-
- await page.evaluate(async()=>{await navigator.serviceWorker.ready;});await context.setOffline(true);await page.reload();
- await expect(page.getByText('オフラインで利用中',{exact:true})).toBeVisible();await page.getByRole('button',{name:'対戦・提案'}).click();await page.getByRole('button',{name:/山本騎馬 vs 黒田弓/}).click();
- const offlineExamples=page.getByRole('region',{name:'勝敗別戦闘例'});await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('60.0%');await expect(offlineExamples.getByText('T8',{exact:true})).toBeVisible();
+ await page.goto('./');await page.getByRole('button',{name:'データ'}).click();await page.locator('input[type="file"]').setInputFiles({name:'battle-log-e2e.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});await expect(page.getByText('バックアップを復元しました（編成2件）',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'対戦・提案'}).click();await expect(page.getByRole('button',{name:'100戦で対戦'})).toBeEnabled();await page.getByRole('button',{name:/山本騎馬 vs 黒田弓/}).click();
+ const rate=page.getByRole('region',{name:'100戦勝率'});await expect(rate).toContainText('60.0%');await expect(rate).toContainText('合計100戦（正逆50戦ずつ）');
+ const examples=page.getByRole('region',{name:'勝敗別戦闘例'});await expect(examples).toBeVisible();await expect(examples.getByRole('button',{name:'勝ち例1'})).toBeVisible();await expect(examples.getByRole('button',{name:'負け例1'})).toBeVisible();await expect(examples.getByRole('button',{name:'勝ち例2'})).toHaveCount(0);await expect(examples.getByRole('button',{name:'負け例2'})).toHaveCount(0);
+ await expect(examples.getByText('T1',{exact:true})).toBeVisible();await expect(examples.getByText('T8',{exact:true})).toBeVisible();await expect(examples.getByText(/通常攻撃 -> B:黒田官兵衛 1000/)).toBeVisible();await expect(examples.getByText(/10,000 → 9,000/)).toBeVisible();await examples.getByRole('button',{name:'負け例1'}).click();await expect(examples.getByText(/seed 200/)).toBeVisible();await page.getByRole('button',{name:'閉じる'}).click();
+ await page.evaluate(async()=>{await navigator.serviceWorker.ready;});await context.setOffline(true);await page.reload();await expect(page.getByText('オフラインで利用中',{exact:true})).toBeVisible();await page.getByRole('button',{name:'対戦・提案'}).click();await page.getByRole('button',{name:/山本騎馬 vs 黒田弓/}).click();const offlineExamples=page.getByRole('region',{name:'勝敗別戦闘例'});await expect(page.getByRole('region',{name:'100戦勝率'})).toContainText('60.0%');await expect(offlineExamples.getByText('T8',{exact:true})).toBeVisible();
 });
