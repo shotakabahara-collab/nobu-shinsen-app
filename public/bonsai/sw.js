@@ -1,0 +1,6 @@
+const CACHE='bonsai-v08-live-20260716';const FILES=["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./payload/part-00.b64", "./payload/part-01.b64", "./payload/part-02.b64", "./payload/part-03.b64", "./payload/part-04.b64", "./payload/part-05.b64", "./payload/part-06.b64", "./payload/part-07.b64", "./payload/part-08.b64", "./payload/part-09.b64", "./payload/part-10.b64", "./payload/part-11.b64"];
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting())));
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
+self.addEventListener('message',e=>{if(e.data?.type==='SKIP_WAITING')self.skipWaiting()});
+self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const u=new URL(e.request.url);if(u.origin!==location.origin)return;e.respondWith(caches.match(e.request).then(c=>c||fetch(e.request).then(r=>{if(r.ok){const q=r.clone();caches.open(CACHE).then(x=>x.put(e.request,q))}return r}).catch(()=>e.request.mode==='navigate'?caches.match('./index.html'):c)))});
+self.addEventListener('notificationclick',e=>{e.notification.close();e.waitUntil(clients.openWindow('./'))});
