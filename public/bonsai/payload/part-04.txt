@@ -1,0 +1,37 @@
+-muted);font-size:9px;line-height:1.55}.brief-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}.brief-grid span{padding:8px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--line);font-size:9px;line-height:1.35}.brief-grid em{display:block;margin-bottom:3px;color:var(--muted);font-style:normal;font-size:8px}
+.season-card{position:relative;display:grid;grid-template-columns:1fr auto;gap:8px;margin:0 0 12px;padding:15px 16px;border-radius:21px;border:1px solid rgba(217,183,123,.28);background:radial-gradient(circle at 90% 0,rgba(217,183,123,.15),transparent 42%),linear-gradient(145deg,rgba(31,42,33,.98),rgba(12,20,15,.99));overflow:hidden}.season-card h3{margin:4px 0;font-family:Georgia,"Yu Mincho",serif;font-size:16px}.season-card p{margin:0;color:var(--muted);font-size:9px}.season-card>strong{align-self:center;font:700 31px/1 Georgia,serif;color:#f0d29e}.season-card>strong em{font:500 10px/1 -apple-system,BlinkMacSystemFont,sans-serif;margin-left:3px}.season-track{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:5px}.season-track i{height:5px;border-radius:99px;background:rgba(255,255,255,.08)}.season-track i.done{background:var(--green)}.season-track i.current{background:var(--accent);box-shadow:0 0 0 3px rgba(217,183,123,.1)}.season-last{grid-column:1/-1!important;color:var(--muted)!important;letter-spacing:0!important}
+.relation-bar,.relation-detail>div{height:5px;margin-top:7px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}.relation-bar i,.relation-detail i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--green),var(--accent))}.relation-detail{margin:12px 0;padding:11px 12px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid var(--line)}.relation-detail span{display:block;margin-top:7px;color:var(--muted);font-size:9px}.episode-copy{margin:15px 0;padding:18px;border-radius:18px;background:linear-gradient(145deg,rgba(217,183,123,.09),rgba(255,255,255,.025));border:1px solid rgba(217,183,123,.22);font-family:Georgia,"Yu Mincho",serif;font-size:14px;line-height:2;color:#eee4d1}.episode-sheet:before{content:"記";position:absolute;right:24px;top:20px;font-family:"Yu Mincho",serif;font-size:70px;color:rgba(217,183,123,.06);pointer-events:none}
+.setting-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:9px 0;padding:10px 12px;border-radius:13px;background:rgba(255,255,255,.035);border:1px solid var(--line);font-size:10px}.setting-row select{min-width:110px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:#111b15;color:#ece5d6}.setting-row input[type=checkbox]{width:22px;height:22px;accent-color:#d9b77b}
+html[data-text-scale="large"] .app-shell{font-size:108%}html[data-text-scale="large"] p,html[data-text-scale="large"] small{font-size:105%}html[data-text-scale="xlarge"] .app-shell{font-size:116%}html[data-text-scale="xlarge"] p,html[data-text-scale="xlarge"] small{font-size:112%}
+html.reduce-motion *,html.reduce-motion *:before,html.reduce-motion *:after{animation-duration:.001ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.001ms!important}
+button,.file-button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}.primary,.secondary,.action,.nav-btn{min-height:44px}.sheet{overscroll-behavior:contain}.fullscreen-view{touch-action:pan-y pinch-zoom}
+@media(max-width:520px){.brief-grid{grid-template-columns:1fr 1fr}.brief-grid span:last-child{grid-column:1/-1}.season-card{padding:14px}.season-card>strong{font-size:28px}.daily-brief{padding:13px}}
+
+/* v0.8 Irreversible Pruning Update */
+.system-banner,.undo-banner{position:relative;z-index:15;display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;margin:8px 12px 0;padding:10px 12px;border-radius:14px;border:1px solid var(--line);background:rgba(19,30,22,.97);box-shadow:0 10px 24px rgba(0,0,0,.16);font-size:9px;line-height:1.45}
+.system-banner b,.undo-banner b{color:var(--accent);white-space:nowrap}.system-banner span,.undo-banner span{color:var(--muted)}.system-banner button,.undo-banner button{min-height:34px;padding:6px 10px;border-radius:9px;border:1px solid rgba(217,183,123,.28);background:rgba(217,183,123,.1);color:var(--text);font-size:9px}.system-banner.offline{border-color:rgba(167,174,168,.22)}.system-banner.error{border-color:rgba(217,135,121,.45);box-shadow:inset 3px 0 0 var(--danger)}.system-banner.recovered{border-color:rgba(115,149,121,.45);box-shadow:inset 3px 0 0 var(--green)}.system-banner.update{border-color:rgba(217,183,123,.42)}
+.undo-banner{position:sticky;top:calc(var(--safe-top) + 66px);background:rgba(26,38,29,.98);border-color:rgba(217,183,123,.45);z-index:25}.undo-banner>span{color:var(--text)}
+.action em{display:block;margin-top:2px;font-style:normal;font-size:7px;color:#a9b3aa}.action.blocked{opacity:.55;border-style:dashed}.action.blocked em{color:#d9a196}
+.forecast-card{display:grid;grid-template-columns:105px 1fr;gap:12px;align-items:center;margin:12px 0;padding:13px;border-radius:16px;border:1px solid rgba(217,183,123,.22);background:linear-gradient(145deg,rgba(217,183,123,.08),rgba(255,255,255,.025))}.forecast-card small{display:block;color:var(--accent);font-size:8px}.forecast-card b{display:block;margin:3px 0;font:700 22px/1 Georgia,serif}.forecast-card span{color:var(--muted);font-size:8px}.forecast-card p{margin:0;color:var(--muted);font-size:9px;line-height:1.65}.forecast-card strong{color:var(--text)}
+.risk-panel{margin:14px 0;padding:13px 14px;border-radius:15px;border:1px solid var(--line);background:rgba(255,255,255,.035)}.risk-panel.good{border-color:rgba(115,149,121,.4);box-shadow:inset 3px 0 0 var(--green)}.risk-panel.warning{border-color:rgba(217,135,121,.45);box-shadow:inset 3px 0 0 var(--danger)}.risk-panel b{font-family:Georgia,"Yu Mincho",serif}.risk-panel p{margin:5px 0 0;color:var(--muted);font-size:10px;line-height:1.6}
+@media(max-width:520px){.system-banner,.undo-banner{grid-template-columns:1fr auto;margin-left:8px;margin-right:8px}.system-banner b{grid-column:1/-1}.forecast-card{grid-template-columns:1fr}.undo-banner{top:calc(var(--safe-top) + 61px)}}
+/* v0.8 irreversible pruning */
+.danger-solid{background:linear-gradient(135deg,#a94438,#6f2721)!important;color:#fff4ef!important;box-shadow:0 10px 24px rgba(122,43,34,.28)}
+.irreversible-sheet .risk-panel.warning{border-color:rgba(217,135,121,.58);background:rgba(111,39,33,.24);box-shadow:inset 3px 0 0 var(--danger)}
+
+  </style>
+  <title>BONSAI</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.BonsaiEngine = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const VERSION = 8;
+  const GAME_SPEED = 10;
+  const REAL_DAY = 86400000;
