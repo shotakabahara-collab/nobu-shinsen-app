@@ -25,6 +25,38 @@ print(json.dumps([json.loads(calculate(json.dumps(calc,ensure_ascii=False))),jso
    self.assertEqual(len({tuple(row['candidate']['officers']) for row in search_result['ranked'][0]['role_variants']}),6)
    self.assertEqual(formal_result['type'],'formal_recheck');self.assertEqual(formal_result['verification_level'],'1x1_BALANCED');self.assertEqual(formal_result['min_win_rate'],0.5)
 
+ def test_global_optimizer_covers_every_canonical_officer_and_skill_before_runtime_shortlist(self):
+  with tempfile.TemporaryDirectory() as td:
+   with tarfile.open(ROOT/'public/runtime_bundle_b223.tgz','r:gz') as tf:tf.extractall(td,filter='data')
+   code=r'''
+import json
+import browser_runtime_api as api
+variants,scope=api._canonical_global_variants({'seeds':[],'known_awaken_overrides':[{'name':'山本勘助','awaken':5}]},['足軽','騎馬','鉄砲','弓'])
+variant_officers={name for variant in variants for name in variant['officers']}
+variant_skills={name for variant in variants for name in variant['skills']}
+yamamoto_awaken={variant['awaken'][variant['officers'].index('山本勘助')] for variant in variants if '山本勘助' in variant['officers']}
+def fake_make(spec):
+ return {'formal_status':'FORMAL_EVAL_READY','score':100.0,'attach_assignment':[],'officers':list(spec['officers'])}
+def fake_sim(ctx,candidate,target,trials,seed,blocks):
+ return {'left_balanced_win_rate':0.5,'avg_hp_diff_balanced':1.0}
+api._make=fake_make;api.simulate_many_balanced=fake_sim
+request={'catalog_scope':'canonical_all','seeds':[],'known_awaken_overrides':[{'name':'山本勘助','awaken':5}],'structural_budget':4800,'targets':[{'id':'target','spec':{'officers':['甲','乙','丙'],'awaken':[0,0,0],'unit':'弓','skills':['T1','T2','T3','T4','T5','T6']}}],'units':['足軽','騎馬','鉄砲','弓'],'trials':1,'blocks':1,'role_family_shortlist':4,'seed':100}
+result=json.loads(api.search(json.dumps(request,ensure_ascii=False)))
+print(json.dumps({'scope':scope,'variant_count':len(variants),'variant_officer_count':len(variant_officers),'variant_skill_count':len(variant_skills),'yamamoto_awaken':sorted(yamamoto_awaken),'result':result},ensure_ascii=False))
+'''
+   process=subprocess.run([sys.executable,'-c',code],cwd=Path(td)/'02_ENGINE',text=True,capture_output=True,check=True)
+   payload=json.loads(process.stdout);scope=payload['scope'];result=payload['result'];search_scope=result['search_scope']
+   self.assertEqual(scope['canonical_officer_count'],146);self.assertEqual(scope['canonical_skill_count'],236)
+   self.assertEqual(scope['catalog_attachable_skill_count'],115);self.assertEqual(scope['formal_attachable_skill_count'],112)
+   self.assertEqual(scope['canonical_officer_skill_pair_count'],34456);self.assertEqual(scope['formal_officer_skill_pair_count'],16352)
+   self.assertTrue(scope['prefilter_coverage_complete']);self.assertEqual(payload['variant_officer_count'],146);self.assertEqual(payload['variant_skill_count'],112)
+   self.assertEqual(payload['yamamoto_awaken'],[5]);self.assertLess(payload['variant_count'],500)
+   self.assertEqual(result['version'],'adapter-v3-canonical-global-staged');self.assertEqual(result['claim_status'],'CANONICAL_CATALOG_COMPLETE_STAGED_SEARCH_NO_GLOBAL_OPTIMUM_CLAIM')
+   self.assertFalse(search_scope['budget_cut']);self.assertEqual(search_scope['officer_formal_admission_count'],146);self.assertEqual(search_scope['skill_formal_admission_count'],112)
+   self.assertEqual(search_scope['role_placements_simulated'],24);self.assertEqual({row['candidate']['unit'] for row in result['ranked']},{'足軽','騎馬','鉄砲','弓'})
+   self.assertTrue(all(row['role_comparison']['complete'] and len(row['role_variants'])==6 for row in result['ranked']))
+   self.assertTrue(all(not any(key.startswith('_') for key in row['candidate']) for row in result['ranked']))
+
  def test_optimizer_admits_role_families_atomically_and_compares_all_six_with_common_seeds(self):
   with tempfile.TemporaryDirectory() as td:
    with tarfile.open(ROOT/'public/runtime_bundle_b223.tgz','r:gz') as tf:tf.extractall(td,filter='data')

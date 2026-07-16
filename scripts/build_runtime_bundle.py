@@ -230,7 +230,12 @@ def main()->int:
                     info=tarfile.TarInfo(rel);info.size=len(data);info.mode=0o644;info.mtime=0;info.uid=info.gid=0;info.uname=info.gname=''
                     tf.addfile(info,io.BytesIO(data))
             OUT.parent.mkdir(parents=True,exist_ok=True)
-            with OUT.open('wb') as target,gzip.GzipFile(filename='',mode='wb',fileobj=target,mtime=0,compresslevel=9) as gz:gz.write(raw.getvalue())
+            temp_out=OUT.with_name(f'.{OUT.name}.{os.getpid()}.tmp')
+            try:
+                with temp_out.open('wb') as target,gzip.GzipFile(filename='',mode='wb',fileobj=target,mtime=0,compresslevel=9) as gz:gz.write(raw.getvalue())
+                os.replace(temp_out,OUT)
+            finally:
+                temp_out.unlink(missing_ok=True)
     bundle_sha=sha(OUT)
     if bundle_sha!=LOCK['runtimeBundleSha256']:raise SystemExit('runtime bundle SHA mismatch')
     manifest={

@@ -1,6 +1,6 @@
 import {expect,test} from '@playwright/test';
 
-test.setTimeout(600_000);
+test.setTimeout(900_000);
 
 const now='2026-07-13T00:00:00.000Z';
 const warrior=(id:string,name:string,limitBreak:number,equippedSkills:[string,string])=>({id,name,limitBreak,inherentSkill:'固有戦法',equippedSkills});
@@ -51,4 +51,16 @@ test('runs the real 100-battle canonical flow in an iPhone WebKit environment',a
  await battleLog.click();
  await expect(page.getByRole('region',{name:'100戦結果'}).getByText('100戦の勝率')).toBeVisible();
  await expect(page.getByRole('region',{name:'戦闘例'})).toBeVisible();
+ await page.getByRole('button',{name:'閉じる'}).last().click();
+
+ await page.getByLabel('最適化対象').selectOption(backup.formations[1].id);
+ await expect(page.getByLabel('探索範囲')).toHaveValue('canonical_all');
+ await page.getByRole('button',{name:'最適編成を探索'}).click();
+ await expect(page.getByText('全カタログの段階探索が完了しました。上位候補を表示します',{exact:true})).toBeVisible({timeout:540_000});
+ const panel=page.getByLabel('最適編成候補');
+ await expect(panel.getByText('全カタログ事前評価 完了',{exact:true})).toBeVisible();
+ await expect(panel.getByText(/146\/146武将・236\/236戦法・全34,456関係/)).toBeVisible();
+ await expect(panel.getByText(/役割配置24件（4編成組）を比較/)).toBeVisible();
+ await expect(page.locator('body')).not.toContainText('RUNTIME-001');
+ await expect(page.locator('body')).not.toContainText('RUNTIME-002');
 });

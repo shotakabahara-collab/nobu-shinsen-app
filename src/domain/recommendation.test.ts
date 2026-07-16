@@ -26,7 +26,17 @@ describe('recommendation',()=>{
   expect(text).toContain('70.0%');
   expect(text).toContain('+123.4');
   expect(text).toContain('大将・副将全6配置');
-  expect(text).toContain('大域的な絶対最適を保証');
+ expect(text).toContain('大域的な絶対最適を保証');
+ });
+
+ it('explains complete catalog prefilter coverage without claiming an exhaustive optimum',()=>{
+  const ranked=getRankedRecommendations(result)[0]!;
+  const reasons=buildRecommendationReasons(ranked,0,'target',{catalog_scope:'canonical_all',canonical_officer_count:146,canonical_skill_count:236,formal_attachable_skill_count:112,prefilter_coverage_complete:true,officer_formal_admission_count:136,skill_formal_admission_count:99,generated:358,shortlist_simulated:24});
+  const text=reasons.join(' ');
+  expect(text).toContain('全146武将・全236戦法');
+  expect(text).toContain('武将136名・戦法99件');
+  expect(text).toContain('直積総当たり');
+  expect(text).not.toContain('未登録の武将・戦法は探索対象外');
  });
 
  it('swaps the complete officer package and reuses that role variant evaluation',()=>{
