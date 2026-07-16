@@ -2,7 +2,7 @@ import {describe,expect,it,vi} from 'vitest';
 import type {RuntimeResult} from '../runtime/contracts';
 import type {CanonicalOfficer} from '../services/canonicalOfficerCatalog';
 import type {CanonicalSkill} from '../services/canonicalSkillCatalog';
-import {applyFinalRecommendationEvaluations,buildRecommendationReasons,candidateToRuntimeFormation,getRankedRecommendations,nextRecommendationName,recommendationForRoleOrder,recommendationToFormation,swapCandidateRoles,type CandidateSpec} from './recommendation';
+import {applyFinalRecommendationEvaluations,buildRecommendationReasons,candidateToRuntimeFormation,getRankedRecommendations,nextRecommendationName,rankCompletedRecommendationEvaluations,recommendationForRoleOrder,recommendationToFormation,swapCandidateRoles,type CandidateSpec} from './recommendation';
 
 const candidate:CandidateSpec={officers:['柿崎景家','北条綱成','榊原康政'],awaken:[1,2,3],unit:'騎馬',skills:['A','B','C','D','E','F']};
 const deputyAsCommander:CandidateSpec={officers:['榊原康政','北条綱成','柿崎景家'],awaken:[3,2,1],unit:'騎馬',skills:['E','F','C','D','A','B']};
@@ -67,13 +67,26 @@ describe('recommendation',()=>{
 
  it('keeps only candidates backed by a complete and internally consistent 100-battle result',()=>{
   const completed={type:'simulation',version:'v',runtime:'B223',win_rate:.62,hp_diff:-345.6,battle_evaluation:{summary:{requestedBattles:100,completedBattles:100,wins:62,losses:33,draws:5,winRate:.62},examples:[]}} satisfies RuntimeResult;
-  const finalized=applyFinalRecommendationEvaluations(result,'target',[{candidate,result:completed}]);
+  const finalized=applyFinalRecommendationEvaluations(result,'target',[{candidate,result:completed}],{requested:4,completed:4,failed:0,battlesPerCandidate:20,finalistLimit:2,finalRequested:1});
   const ranked=getRankedRecommendations(finalized);
   expect(ranked).toHaveLength(1);expect(ranked[0]).toMatchObject({win_rates:{target:.62},hp_diffs:{target:-345.6},battle_evidence:{target:{measurement_stage:'FINAL',completed_battles:100,wins:62,losses:33,draws:5}}});
-  expect(finalized.search_scope).toMatchObject({final_evaluation_requested:1,final_evaluation_completed:1,final_evaluation_failed:0,final_battles_per_candidate:100});
+  expect(finalized.search_scope).toMatchObject({tournament_screen_requested:4,tournament_screen_completed:4,tournament_screen_failed:0,tournament_screen_battles_per_candidate:20,tournament_finalist_limit:2,final_evaluation_requested:1,final_evaluation_completed:1,final_evaluation_failed:0,final_battles_per_candidate:100,ranking_measurement_policy:'COMPLETED_20_BATTLE_TOURNAMENT_SCREEN_THEN_COMPLETED_100_BATTLE_FINALISTS_ONLY'});
+  expect(buildRecommendationReasons(ranked[0]!,0,'target',finalized.search_scope as Record<string,unknown>).join(' ')).toContain('事前候補4件を各20戦で再比較し、その上位1件を各100戦で確定評価');
   const incomplete={...completed,battle_evaluation:{summary:{requestedBattles:100,completedBattles:0,wins:0,losses:0,draws:0,winRate:0},examples:[]},win_rate:0,hp_diff:0};
   const rejected=applyFinalRecommendationEvaluations(result,'target',[{candidate,result:incomplete}]);
   expect(getRankedRecommendations(rejected)).toEqual([]);expect(rejected.search_status).toBe('NO_VALID_FINAL_100_MEASUREMENTS');
+ });
+
+ it('ranks only complete 20-battle tournament measurements by win rate and then HP difference',()=>{
+  const third=swapCandidateRoles(candidate,0,1);
+  const measurement=(wins:number,hp:number,completed=20)=>({type:'simulation',version:'v',runtime:'B223',win_rate:completed?wins/completed:0,hp_diff:hp,battle_evaluation:{summary:{requestedBattles:20,completedBattles:completed,wins,losses:completed-wins,draws:0,winRate:completed?wins/completed:0},examples:[]}} satisfies RuntimeResult);
+  const ranked=rankCompletedRecommendationEvaluations([
+   {candidate,result:measurement(11,900)},
+   {candidate:deputyAsCommander,result:measurement(12,-100)},
+   {candidate:third,result:measurement(12,50)},
+   {candidate:swapCandidateRoles(candidate,1,2),result:measurement(6,9999,10)},
+  ],20);
+  expect(ranked.map(row=>row.candidate)).toEqual([third,deputyAsCommander,candidate]);
  });
 
  it('creates a unique recommendation name',()=>{

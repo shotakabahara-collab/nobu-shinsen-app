@@ -20,9 +20,9 @@ type Sample=CalculateBatchResult['forward']['samples'][number];
 type DirectionBatch=CalculateBatchResult['forward'];
 type Aggregate={leftWins:number;rightWins:number;draws:number;candidateHpSum:number;rawHpSum:number;samples:Sample[];runtimeFailures:Record<string,unknown>[]};
 
-export type BattleCalculationProgress={stage:'battles'|'examples';completedBattles:number;totalBattles:100;completedExamples:number;totalExamples:number};
+export type BattleCalculationProgress={stage:'battles'|'examples';completedBattles:number;totalBattles:number;completedExamples:number;totalExamples:number};
 
-const TOTAL_PER_DIRECTION=50;
+const DEFAULT_TOTAL_BATTLES=100;
 const INITIAL_BATCH_PER_DIRECTION=10;
 
 export class RuntimeCancelledError extends Error{
@@ -63,7 +63,7 @@ function workerEventError(event:ErrorEvent):Error{
 
 function emptyAggregate():Aggregate{return {leftWins:0,rightWins:0,draws:0,candidateHpSum:0,rawHpSum:0,samples:[],runtimeFailures:[]};}
 function appendBatch(aggregate:Aggregate,batch:DirectionBatch){aggregate.leftWins+=batch.left_wins;aggregate.rightWins+=batch.right_wins;aggregate.draws+=batch.draws;aggregate.candidateHpSum+=batch.candidate_hp_sum;aggregate.rawHpSum+=batch.raw_hp_sum;aggregate.samples.push(...batch.samples);aggregate.runtimeFailures.push(...batch.runtime_failures);}
-function directionBlock(aggregate:Aggregate){return {trials:TOTAL_PER_DIRECTION,completed_trials:TOTAL_PER_DIRECTION,left_wins:aggregate.leftWins,right_wins:aggregate.rightWins,draws:aggregate.draws,left_win_rate:aggregate.leftWins/TOTAL_PER_DIRECTION,right_win_rate:aggregate.rightWins/TOTAL_PER_DIRECTION,avg_hp_diff:aggregate.rawHpSum/TOTAL_PER_DIRECTION,runtime_failures:aggregate.runtimeFailures};}
+function directionBlock(aggregate:Aggregate,trials:number){return {trials,completed_trials:trials,left_wins:aggregate.leftWins,right_wins:aggregate.rightWins,draws:aggregate.draws,left_win_rate:aggregate.leftWins/trials,right_win_rate:aggregate.rightWins/trials,avg_hp_diff:aggregate.rawHpSum/trials,runtime_failures:aggregate.runtimeFailures};}
 
 export class RuntimeClient{
  private worker:Worker|null=null;
@@ -119,7 +119,7 @@ export class RuntimeClient{
  private async runBatchOnce(request:CalculateRequest,trials:number,forwardSeed:number,reverseSeed:number,generation:number):Promise<CalculateBatchResult>{
   this.assertActive(generation);
   const raw=await this.runRaw('calculateBatch',{...request,trials,blocks:1,include_detail:false,forward_seed:forwardSeed,reverse_seed:reverseSeed});
-  this.assertActive(generation);const parsed=calculateBatchResultSchema.parse(raw);if(parsed.trials_per_direction!==trials)throw new Error(`100戦バッチの要求件数と応答件数が一致しません（要求${trials}／応答${parsed.trials_per_direction}）`);return parsed;
+  this.assertActive(generation);const parsed=calculateBatchResultSchema.parse(raw);if(parsed.trials_per_direction!==trials)throw new Error(`分割バッチの要求件数と応答件数が一致しません（要求${trials}／応答${parsed.trials_per_direction}）`);return parsed;
  }
 
  private async runChunk(request:CalculateRequest,trials:number,forwardSeed:number,reverseSeed:number,generation:number,allowSingleRetry=true):Promise<CalculateBatchResult[]>{
@@ -157,50 +157,52 @@ export class RuntimeClient{
   throw lastError instanceof Error?lastError:new Error(`${outcome==='win'?'勝ち':'負け'}例の詳細traceを取得できませんでした`);
  }
 
- private async calculateBatched(requestValue:CalculateRequest,onProgress?:((progress:BattleCalculationProgress)=>void),includeExamples=true):Promise<RuntimeResult>{
+ private async calculateBatched(requestValue:CalculateRequest,onProgress?:((progress:BattleCalculationProgress)=>void),includeExamples=true,totalBattles=DEFAULT_TOTAL_BATTLES):Promise<RuntimeResult>{
+  if(!Number.isInteger(totalBattles)||totalBattles<2||totalBattles>100||totalBattles%2!==0)throw new Error('対戦数は2〜100の偶数で指定してください');
   const request=calculateRequestSchema.parse(requestValue),generation=this.generation,started=Date.now();
+  const totalPerDirection=totalBattles/2;
   const forward=emptyAggregate(),reverse=emptyAggregate();let completedPerDirection=0,forwardSeed=request.seed,reverseSeed=request.seed+5003;let firstBatch:CalculateBatchResult|undefined;
-  while(completedPerDirection<TOTAL_PER_DIRECTION){
+  while(completedPerDirection<totalPerDirection){
    this.assertActive(generation);
-   const trials=Math.min(INITIAL_BATCH_PER_DIRECTION,TOTAL_PER_DIRECTION-completedPerDirection);
+   const trials=Math.min(INITIAL_BATCH_PER_DIRECTION,totalPerDirection-completedPerDirection);
    let batches:CalculateBatchResult[];
    try{batches=await this.runChunk(request,trials,forwardSeed,reverseSeed,generation);}
    catch(error){if(error instanceof RuntimeCancelledError)throw error;throw contextualError(error,{runtime_stage:'battles',completed_battles:completedPerDirection*2,requested_batch_battles:trials*2,forward_seed:forwardSeed,reverse_seed:reverseSeed});}
    for(const batch of batches){
-    if(batch.forward.completed_trials!==batch.trials_per_direction||batch.reverse.completed_trials!==batch.trials_per_direction)throw new Error('100戦バッチの完了件数が一致しません');
+    if(batch.forward.completed_trials!==batch.trials_per_direction||batch.reverse.completed_trials!==batch.trials_per_direction)throw new Error('分割バッチの完了件数が一致しません');
     firstBatch??=batch;appendBatch(forward,batch.forward);appendBatch(reverse,batch.reverse);completedPerDirection+=batch.trials_per_direction;
     forwardSeed=batch.forward.next_seed;reverseSeed=batch.reverse.next_seed;
-    onProgress?.({stage:'battles',completedBattles:completedPerDirection*2,totalBattles:100,completedExamples:0,totalExamples:0});
+    onProgress?.({stage:'battles',completedBattles:completedPerDirection*2,totalBattles,completedExamples:0,totalExamples:0});
     await this.yieldToBrowser();
    }
   }
   const wins=forward.leftWins+reverse.rightWins,losses=forward.rightWins+reverse.leftWins,draws=forward.draws+reverse.draws,completed=wins+losses+draws;
-  if(completed!==100)throw new Error(`100戦の集計件数が一致しません（${completed}戦）`);
+  if(completed!==totalBattles)throw new Error(`${totalBattles}戦の集計件数が一致しません（${completed}戦）`);
   const winRate=wins/completed,hpDiff=(forward.candidateHpSum+reverse.candidateHpSum)/completed;
   const samples=[...forward.samples,...reverse.samples],outcomes:Exclude<Outcome,'draw'>[]=[];if(includeExamples&&wins>0)outcomes.push('win');if(includeExamples&&losses>0)outcomes.push('loss');
   const examples=[];
   for(const outcome of outcomes){
    try{examples.push(await this.detailForOutcome(request,outcome,samples,generation));}
-   catch(error){if(error instanceof RuntimeCancelledError)throw error;throw contextualError(error,{runtime_stage:'battle_example',completed_battles:100,example_outcome:outcome,completed_examples:examples.length,total_examples:outcomes.length});}
-   onProgress?.({stage:'examples',completedBattles:100,totalBattles:100,completedExamples:examples.length,totalExamples:outcomes.length});
+   catch(error){if(error instanceof RuntimeCancelledError)throw error;throw contextualError(error,{runtime_stage:'battle_example',completed_battles:totalBattles,example_outcome:outcome,completed_examples:examples.length,total_examples:outcomes.length});}
+   onProgress?.({stage:'examples',completedBattles:totalBattles,totalBattles,completedExamples:examples.length,totalExamples:outcomes.length});
    await this.yieldToBrowser();
   }
-  const summary={requestedBattles:100,completedBattles:completed,wins,losses,draws,winRate};
+  const summary={requestedBattles:totalBattles,completedBattles:completed,wins,losses,draws,winRate};
   return {
-   type:'simulation',version:'adapter-v2-browser-100-streaming-batches',runtime:firstBatch?.runtime??'B223_CANONICAL_PYTHON_VIA_PYODIDE',target:request.target,
-   trials_per_direction:50,trials_total:completed,blocks:1,win_rate:winRate,hp_diff:hpDiff,elapsed_seconds:Math.round((Date.now()-started)/100)/10,
+   type:'simulation',version:`adapter-v2-browser-${totalBattles}-streaming-batches`,runtime:firstBatch?.runtime??'B223_CANONICAL_PYTHON_VIA_PYODIDE',target:request.target,
+   trials_per_direction:totalPerDirection,trials_total:completed,blocks:1,win_rate:winRate,hp_diff:hpDiff,elapsed_seconds:Math.round((Date.now()-started)/100)/10,
    ...(firstBatch?.candidate_assignment!==undefined?{candidate_assignment:firstBatch.candidate_assignment}:{}),...(firstBatch?.formal_status!==undefined?{formal_status:firstBatch.formal_status}:{}),...(firstBatch?.runtime_overlay_audit!==undefined?{runtime_overlay_audit:firstBatch.runtime_overlay_audit}:{}),
-   sim:{trials_per_direction:50,blocks:1,seed:request.seed,forward:[directionBlock(forward)],reverse:[directionBlock(reverse)],left_balanced_win_rate:winRate,avg_hp_diff_balanced:hpDiff,timeline_trace_blocks:{forward:[],reverse:[]},browser_execution_policy:'CANONICAL_SIMULATE_ONCE_50_FORWARD_50_REVERSE_STREAMED_SINGLE_PYODIDE_WORKER'},
+   sim:{trials_per_direction:totalPerDirection,blocks:1,seed:request.seed,forward:[directionBlock(forward,totalPerDirection)],reverse:[directionBlock(reverse,totalPerDirection)],left_balanced_win_rate:winRate,avg_hp_diff_balanced:hpDiff,timeline_trace_blocks:{forward:[],reverse:[]},browser_execution_policy:`CANONICAL_SIMULATE_ONCE_${totalPerDirection}_FORWARD_${totalPerDirection}_REVERSE_STREAMED_SINGLE_PYODIDE_WORKER`},
    battle_evaluation:{schemaVersion:1,summary,examples},
   };
  }
 
  calculate(request:CalculateRequest,onProgress?:((progress:BattleCalculationProgress)=>void)){
   const retry=()=>{void this.calculate(request,onProgress);};
-  return this.calculateBatched(request,onProgress,true).catch(error=>{if(error instanceof RuntimeCancelledError)throw error;throw notifyRuntimeError(error,retry);});
+  return this.calculateBatched(request,onProgress,true,DEFAULT_TOTAL_BATTLES).catch(error=>{if(error instanceof RuntimeCancelledError)throw error;throw notifyRuntimeError(error,retry);});
  }
- calculateSummary(request:CalculateRequest,onProgress?:((progress:BattleCalculationProgress)=>void)){
-  return this.calculateBatched(request,onProgress,false);
+ calculateSummary(request:CalculateRequest,onProgress?:((progress:BattleCalculationProgress)=>void),totalBattles=DEFAULT_TOTAL_BATTLES){
+  return this.calculateBatched(request,onProgress,false,totalBattles);
  }
  detail(request:BattleDetailRequest){return this.runPublic('detail',request);}
  search(request:unknown){return this.runPublic('search',request);}
