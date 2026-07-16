@@ -45,6 +45,8 @@ test('opens on iPhone and presents visible image import, photo library and camer
  await expect(page.getByLabel('編成A')).toBeVisible();
  await expect(page.getByLabel('編成B')).toBeVisible();
  await expect(page.getByLabel('最適化対象')).toBeVisible();
+ await expect(page.getByLabel('探索範囲')).toHaveValue('canonical_all');
+ await expect(page.getByText('全34,456武将×戦法関係を確認して合法候補を絞り',{exact:false})).toBeVisible();
  await expect(page.getByText('順方向50戦＋逆方向50戦の合計100戦で勝率を算出します。')).toBeVisible();
  await expect(page.getByRole('button',{name:'100戦で対戦'})).toBeDisabled();
  await expect(page.getByRole('button',{name:'最適編成を探索'})).toBeDisabled();
@@ -81,6 +83,27 @@ test('blocks the reported double unit-type skill formation before starting Pyodi
  await expect(page.getByRole('button',{name:'中止'})).toHaveCount(0);
 });
 
+test('searches the complete canonical officer and skill catalogs with staged runtime evaluation',async({page})=>{
+ test.setTimeout(600_000);
+ const now='2026-07-16T00:00:00.000Z';
+ const warrior=(id:string,name:string,limitBreak:number,equippedSkills:[string,string])=>({id,name,limitBreak,inherentSkill:'固有戦法',equippedSkills});
+ const target={id:'40000000-0000-4000-8000-000000000001',name:'全探索対象・黒田弓',kind:'enemy' as const,troopType:'弓' as const,troopLevel:10,troops:10000,createdAt:now,updatedAt:now,warriors:[
+  warrior('41000000-0000-4000-8000-000000000001','黒田官兵衛',3,['七十二の計','紅蓮の炎']),warrior('41000000-0000-4000-8000-000000000002','豊臣秀吉',1,['三河弓兵隊','嚢沙之計']),warrior('41000000-0000-4000-8000-000000000003','ねね',3,['罵詈雑言','沈魚落雁'])]};
+ const backup={schemaVersion:2,exportedAt:now,warriors:[],skills:[],battleResults:[],formations:[target]};
+ await page.goto('./');await page.getByRole('button',{name:'データ'}).click();
+ await page.locator('input[type="file"]').setInputFiles({name:'global-search-e2e.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
+ await expect(page.getByText('バックアップを復元しました（編成1件）',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'対戦・提案'}).click();await page.getByLabel('最適化対象').selectOption(target.id);
+ await expect(page.getByLabel('探索範囲')).toHaveValue('canonical_all');await page.getByRole('button',{name:'最適編成を探索'}).click();
+ await expect(page.getByText('全カタログの段階探索が完了しました。上位候補を表示します',{exact:true})).toBeVisible({timeout:420_000});
+ const panel=page.getByLabel('最適編成候補');await expect(panel.getByText('全カタログ事前評価 完了',{exact:true})).toBeVisible();
+ await expect(panel.getByText(/146\/146武将・236\/236戦法・全34,456関係/)).toBeVisible();
+ await expect(panel.getByText(/装着可能115件中、正式候補112件/)).toBeVisible();
+ await expect(panel.getByText(/役割配置24件（4編成組）を比較/)).toBeVisible();
+ await expect(panel.getByText(/候補1/).first()).toBeVisible();await expect(page.getByRole('button',{name:'この役割配置を30×3再評価'})).toBeVisible();
+ await expect(page.locator('body')).not.toContainText('RUNTIME-001');await expect(page.locator('body')).not.toContainText('RUNTIME-002');
+});
+
 test('runs 100 balanced battles and shows one win and loss example through T8 online and offline',async({page,context})=>{
  test.setTimeout(600_000);
  const now='2026-07-13T00:00:00.000Z';
@@ -100,6 +123,7 @@ test('runs 100 balanced battles and shows one win and loss example through T8 on
  const formationA=page.getByLabel('編成A');const formationB=page.getByLabel('編成B');
  await formationA.selectOption(backup.formations[0].id);await formationB.selectOption(backup.formations[1].id);
  await page.getByLabel('最適化対象').selectOption(backup.formations[1].id);
+ await expect(page.getByLabel('探索範囲')).toHaveValue('canonical_all');
  await expect(page.getByRole('button',{name:'最適編成を探索'})).toBeEnabled();
 
  await page.getByRole('button',{name:'100戦で対戦'}).click();

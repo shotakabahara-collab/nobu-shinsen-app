@@ -38,6 +38,7 @@ export type RankedRecommendation=RoleVariant&{
 };
 
 export type SearchScope={
+ catalog_scope?:'canonical_all'|'owned_only';
  generated?:number;
  budget?:number;
  budget_cut?:boolean;
@@ -49,6 +50,22 @@ export type SearchScope={
  role_families_shortlisted?:number;
  role_placements_simulated?:number;
  role_placements_expected_per_family?:number;
+ canonical_officer_count?:number;
+ canonical_skill_count?:number;
+ catalog_attachable_skill_count?:number;
+ formal_attachable_skill_count?:number;
+ formal_attachable_excluded_count?:number;
+ non_attachable_skill_count?:number;
+ canonical_officer_skill_pair_count?:number;
+ formal_officer_skill_pair_count?:number;
+ officer_prefilter_coverage_count?:number;
+ skill_prefilter_coverage_count?:number;
+ prefilter_coverage_complete?:boolean;
+ officer_formal_admission_count?:number;
+ skill_formal_admission_count?:number;
+ known_awaken_override_count?:number;
+ formal_attachable_exclusions?:Array<{name?:string;reasons?:string[]}>;
+ combination_policy?:string;
 };
 
 export const roleLabels=['大将','副将1','副将2'] as const;
@@ -132,8 +149,12 @@ export function buildRecommendationReasons(item:RankedRecommendation,index:numbe
  if(item.role_comparison?.complete)reasons.push(`同じ3武将の大将・副将全${item.role_comparison.placements_simulated??6}配置を同一乱数条件で比較し、最良の役割順を選定しています。`);
  else if(typeof item.role_comparison?.placements_simulated==='number')reasons.push(`役割配置は${item.role_comparison.placements_simulated}件を比較しましたが、正本条件を満たさない配置は除外しています。`);
  if(typeof scope.generated==='number')reasons.push(`${scope.generated}件を生成し、${scope.shortlist_simulated??0}件を実戦シミュレーションした範囲から選定しています。`);
- if(scope.budget_cut)reasons.push('探索予算で打ち切っているため、大域的な絶対最適を保証するものではありません。');
- else reasons.push('設定された探索範囲は完走していますが、未登録の武将・戦法は探索対象外です。');
+ if(scope.catalog_scope==='canonical_all'){
+  if(scope.prefilter_coverage_complete)reasons.push(`正本の全${scope.canonical_officer_count??0}武将・全${scope.canonical_skill_count??0}戦法を事前評価し、正式候補${scope.formal_attachable_skill_count??0}戦法をすべて探索レーンへ投入しています。`);
+  if(typeof scope.officer_formal_admission_count==='number'&&typeof scope.skill_formal_admission_count==='number')reasons.push(`正本の安全ゲートを通過した武将${scope.officer_formal_admission_count}名・戦法${scope.skill_formal_admission_count}件から実戦候補を比較しています。未確認効果は推測で補いません。`);
+  reasons.push('全カタログを母集団にした段階探索であり、全3武将×全6戦法の直積総当たりや大域的な絶対最適を保証するものではありません。');
+ }else if(scope.budget_cut)reasons.push('探索予算で打ち切っているため、大域的な絶対最適を保証するものではありません。');
+ else reasons.push('設定された所有範囲は完走していますが、未登録の武将・戦法は探索対象外です。');
  return reasons;
 }
 
