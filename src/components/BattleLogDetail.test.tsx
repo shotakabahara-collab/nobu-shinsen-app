@@ -34,4 +34,9 @@ describe('BattleLogDetail',()=>{
   expect(within(examples).getAllByText(/^T8.*戦闘終了済み$/)).toHaveLength(2);
   expect(within(examples).getByText((_,element)=>element?.tagName==='P'&&Boolean(element.textContent?.includes('兵数 -100')&&element.textContent.includes('10,000 → 9,900')))).toBeVisible();
  });
+
+ it('keeps the operational-only warning in a saved battle log',()=>{
+  const log:BattleResult={...baseLog,payload:{...payload,formal_status:'OPERATIONAL_ONLY_RUNTIME_EVIDENCE_INCOMPLETE'}};render(<BattleLogDetail log={log} formations={[]} onClose={()=>{}}/>);
+  expect(within(screen.getByRole('region',{name:'100戦結果'})).getByRole('alert')).toHaveTextContent('正式再評価には使用しません');
+ });
 });

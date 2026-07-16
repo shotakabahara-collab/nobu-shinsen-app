@@ -220,7 +220,9 @@ def main()->int:
             context=load_canonical_context(stage)
             officer_catalog=build_officer_catalog(context.get('officers',[]),context.get('trait_effects',[]))
             skill_catalog=build_skill_catalog(context.get('skills',[]),context.get('skill_effects',[]))
-            shutil.copy2(ROOT/'runtime/adapter/browser_runtime_api.py',stage/'02_ENGINE/browser_runtime_api.py')
+            adapter_files=['browser_runtime_api.py','operational_runtime_overlay.py']
+            for adapter_file in adapter_files:
+                shutil.copy2(ROOT/'runtime/adapter'/adapter_file,stage/'02_ENGINE'/adapter_file)
             raw=io.BytesIO()
             with tarfile.open(fileobj=raw,mode='w',format=tarfile.PAX_FORMAT) as tf:
                 for path in sorted(p for p in stage.rglob('*') if p.is_file()):
@@ -236,7 +238,7 @@ def main()->int:
         'canonicalArchiveSha256':LOCK['archiveSha256'],
         'battleRuntimeSha256':LOCK['battleRuntimeSha256'],
         'bundleSha256':bundle_sha,
-        'memberCount':len(names)+1,
+        'memberCount':len(names)+len(adapter_files),
         'duplicateMemberCount':0,
         'officerCatalogSha256':sha(OFFICER_CATALOG_OUT),
         'officerCatalogCount':officer_catalog['officerCount'],

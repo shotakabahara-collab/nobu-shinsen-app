@@ -24,6 +24,7 @@ class RuntimeIntegrityTest(unittest.TestCase):
    self.assertEqual(len(names),len(set(names)))
    self.assertEqual(sha_bytes(bundle.extractfile(LOCK['battleRuntimePath']).read()),LOCK['battleRuntimeSha256'])
    self.assertIn('02_ENGINE/browser_runtime_api.py',names)
+   self.assertIn('02_ENGINE/operational_runtime_overlay.py',names)
 
  def test_generated_officer_catalog_matches_canonical_db(self):
   catalog_bytes=(ROOT/'public/canonical_officer_catalog.json').read_bytes();catalog=json.loads(catalog_bytes)
