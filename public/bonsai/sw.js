@@ -1,4 +1,4 @@
-const CACHE='bonsai-v08-live-final-20260716';const FILES=["./","./index.html","./manifest.webmanifest","./icon.svg",...Array.from({length:5},(_,i)=>`./payload/part-${String(i).padStart(2,'0')}.txt`),...Array.from({length:8},(_,i)=>`./payload/tail-${String(i).padStart(2,'0')}.txt`)];
+const CACHE='bonsai-v08-live-safe26-20260716';const FILES=["./","./index.html","./manifest.webmanifest","./icon.svg",...Array.from({length:26},(_,i)=>`./payload/part-${String(i).padStart(2,'0')}.txt`)];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
 self.addEventListener('message',e=>{if(e.data?.type==='SKIP_WAITING')self.skipWaiting()});
