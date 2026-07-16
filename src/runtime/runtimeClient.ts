@@ -189,7 +189,7 @@ export class RuntimeClient{
   return {
    type:'simulation',version:'adapter-v2-browser-100-streaming-batches',runtime:firstBatch?.runtime??'B223_CANONICAL_PYTHON_VIA_PYODIDE',target:request.target,
    trials_per_direction:50,trials_total:completed,blocks:1,win_rate:winRate,hp_diff:hpDiff,elapsed_seconds:Math.round((Date.now()-started)/100)/10,
-   ...(firstBatch?.candidate_assignment!==undefined?{candidate_assignment:firstBatch.candidate_assignment}:{}),...(firstBatch?.formal_status!==undefined?{formal_status:firstBatch.formal_status}:{}),
+   ...(firstBatch?.candidate_assignment!==undefined?{candidate_assignment:firstBatch.candidate_assignment}:{}),...(firstBatch?.formal_status!==undefined?{formal_status:firstBatch.formal_status}:{}),...(firstBatch?.runtime_overlay_audit!==undefined?{runtime_overlay_audit:firstBatch.runtime_overlay_audit}:{}),
    sim:{trials_per_direction:50,blocks:1,seed:request.seed,forward:[directionBlock(forward)],reverse:[directionBlock(reverse)],left_balanced_win_rate:winRate,avg_hp_diff_balanced:hpDiff,timeline_trace_blocks:{forward:[],reverse:[]},browser_execution_policy:'CANONICAL_SIMULATE_ONCE_50_FORWARD_50_REVERSE_STREAMED_SINGLE_PYODIDE_WORKER'},
    battle_evaluation:{schemaVersion:1,summary,examples},
   };

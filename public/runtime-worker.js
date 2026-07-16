@@ -147,6 +147,7 @@ def calculate_batch(request_json):
         'type':'simulation_batch','version':'batch-v2-streaming-worker','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE',
         'trials_per_direction':required,'forward':_batch_direction_public(forward),'reverse':_batch_direction_public(reverse),
         'candidate_assignment':candidate.get('attach_assignment'),'formal_status':candidate.get('formal_status'),
+        'runtime_overlay_audit':candidate.get('runtime_overlay_audit'),
     }
     raw=json.dumps(payload,ensure_ascii=False)
     del payload,forward,reverse,candidate,target,ctx
@@ -191,7 +192,8 @@ def calculate_100(request_json):
         'type':'simulation','version':'adapter-v1-browser-100','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE',
         'target':req.get('target','CUSTOM'),'trials_per_direction':50,'trials_total':completed,'blocks':1,
         'win_rate':win_rate,'hp_diff':hp_diff,'elapsed_seconds':round(time.time()-started,3),
-        'candidate_assignment':candidate.get('attach_assignment'),'formal_status':candidate.get('formal_status'),'sim':sim,
+        'candidate_assignment':candidate.get('attach_assignment'),'formal_status':candidate.get('formal_status'),
+        'runtime_overlay_audit':candidate.get('runtime_overlay_audit'),'sim':sim,
         'battle_evaluation':{'schemaVersion':1,'summary':summary,'examples':examples},
     }
     return json.dumps(payload,ensure_ascii=False)

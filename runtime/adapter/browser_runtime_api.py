@@ -3,11 +3,13 @@ from __future__ import annotations
 import copy, gc, itertools, json, time
 from custom_evaluate import load_context, resolve_officers_by_awaken_values, resolve_skills, build_best, public_best
 from battle_simulator import simulate_many_balanced
+from operational_runtime_overlay import audit_best, install_runtime_overlay
 
 _CTX=None
 def _ctx():
     global _CTX
     if _CTX is None:_CTX=load_context()
+    install_runtime_overlay(_CTX)
     return _CTX
 
 def _make(spec):
@@ -26,6 +28,10 @@ def _make(spec):
     result=build_best(ctx,officers,skills,spec['unit'],spec.get('mode','owned'),fixed_placement=bool(spec.get('fixed_placement',True)),ignore_formal_overlap=bool(spec.get('ignore_formal_overlap',True)))
     if spec.get('unit_level') is not None:
         result['unit_level']=int(spec['unit_level']);result['unit_coef']=1.0+int(spec['unit_level'])*0.02;result['unit_level_sources']=['NOBU Companion explicit input via protected adapter']
+    runtime_audit=audit_best(result,ctx)
+    result['runtime_overlay_audit']=runtime_audit
+    if not runtime_audit['formalReady'] and not str(result.get('formal_status') or '').startswith('STOP'):
+        result['formal_status']='OPERATIONAL_ONLY_RUNTIME_EVIDENCE_INCOMPLETE'
     return result
 
 TARGETS={
@@ -38,7 +44,7 @@ def evaluate_request(request_json):
     candidate=_make(req['candidate']); target=_make(req.get('target_spec') or TARGETS[req['target']])
     trials=max(1,min(int(req.get('trials',10)),100));blocks=max(1,min(int(req.get('blocks',1)),3));seed=int(req.get('seed',1326230000));started=time.time()
     sim=simulate_many_balanced(_ctx(),copy.deepcopy(candidate),copy.deepcopy(target),trials=trials,seed=seed,blocks=blocks)
-    return json.dumps({'type':'simulation','version':'adapter-v1','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','target':req.get('target','CUSTOM'),'trials_per_direction':trials,'blocks':blocks,'win_rate':sim.get('left_balanced_win_rate'),'hp_diff':sim.get('avg_hp_diff_balanced'),'elapsed_seconds':round(time.time()-started,3),'candidate_assignment':candidate.get('attach_assignment'),'formal_status':candidate.get('formal_status'),'sim':sim if req.get('include_detail') else None},ensure_ascii=False)
+    return json.dumps({'type':'simulation','version':'adapter-v1','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','target':req.get('target','CUSTOM'),'trials_per_direction':trials,'blocks':blocks,'win_rate':sim.get('left_balanced_win_rate'),'hp_diff':sim.get('avg_hp_diff_balanced'),'elapsed_seconds':round(time.time()-started,3),'candidate_assignment':candidate.get('attach_assignment'),'formal_status':candidate.get('formal_status'),'runtime_overlay_audit':candidate.get('runtime_overlay_audit'),'sim':sim if req.get('include_detail') else None},ensure_ascii=False)
 
 def _base_variants(seed, owned_pool, swap_depth):
     yield seed
@@ -244,6 +250,8 @@ def _rank_key(row):
 def formalize_request(request_json):
     req=json.loads(request_json) if isinstance(request_json,str) else request_json
     candidate=_make(req['candidate'])
+    if not str(candidate.get('formal_status') or '').startswith('FORMAL_EVAL_READY'):
+        raise ValueError('FORMAL_RUNTIME_EVIDENCE_STOP '+json.dumps(candidate.get('runtime_overlay_audit') or {},ensure_ascii=False))
     targets=req.get('targets') or []
     search_mode=str(req.get('search_mode') or 'strongest')
     trials=max(1,min(int(req.get('trials',30)),100));blocks=max(1,min(int(req.get('blocks',3)),3));seed0=int(req.get('seed',1326247000));started=time.time()
@@ -253,7 +261,7 @@ def formalize_request(request_json):
         sim=simulate_many_balanced(_ctx(),copy.deepcopy(candidate),copy.deepcopy(tar),trials=trials,seed=seed0+ti*1000,blocks=blocks)
         results[t['id']]={'win_rate':sim.get('left_balanced_win_rate'),'hp_diff':sim.get('avg_hp_diff_balanced'),'trials_per_direction':trials,'blocks':blocks}
     vals=[x['win_rate'] for x in results.values() if isinstance(x.get('win_rate'),(int,float))]
-    return json.dumps({'type':'formal_recheck','version':'adapter-v1','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','verification_level':f'{trials}x{blocks}_BALANCED','candidate':req['candidate'],'targets':results,'min_win_rate':min(vals) if vals else None,'avg_win_rate':sum(vals)/len(vals) if vals else None,'elapsed_seconds':round(time.time()-started,3)},ensure_ascii=False)
+    return json.dumps({'type':'formal_recheck','version':'adapter-v1','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','verification_level':f'{trials}x{blocks}_BALANCED','candidate':req['candidate'],'targets':results,'min_win_rate':min(vals) if vals else None,'avg_win_rate':sum(vals)/len(vals) if vals else None,'elapsed_seconds':round(time.time()-started,3),'runtime_overlay_audit':candidate.get('runtime_overlay_audit')},ensure_ascii=False)
 
 def optimize_request(request_json):
     req=json.loads(request_json) if isinstance(request_json,str) else request_json

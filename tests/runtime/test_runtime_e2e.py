@@ -85,6 +85,7 @@ print(json.dumps({'batch':batch,'detail':detail,'error':error,'formal_calls':for
    result=subprocess.run([sys.executable,'-c',code,str(ROOT/'public/runtime-worker.js'),str(ROOT/'fixtures/runtime/calculate_request.json')],cwd=Path(td)/'02_ENGINE',text=True,capture_output=True,check=True)
    payload=json.loads(result.stdout);batch=payload['batch'];detail=payload['detail'];error=payload['error']
    self.assertEqual(batch['type'],'simulation_batch');self.assertEqual(batch['version'],'batch-v2-streaming-worker');self.assertEqual(batch['trials_per_direction'],1)
+   self.assertTrue(batch['runtime_overlay_audit']['formalReady'])
    self.assertEqual(batch['forward']['completed_trials'],1);self.assertEqual(batch['reverse']['completed_trials'],1)
    self.assertEqual(batch['forward']['next_seed'],1326230001);self.assertEqual(batch['reverse']['next_seed'],1326235004)
    self.assertEqual(detail['type'],'battle_detail');self.assertEqual(detail['max_turns'],8);self.assertTrue(detail['turns'])
