@@ -12,7 +12,7 @@ const recommendation:RankedRecommendation={
 describe('RoleOrderEditor',()=>{
  it('swaps the entire officer package selected for commander',()=>{
   const onChange=vi.fn();render(<RoleOrderEditor recommendation={recommendation} targetId="target" onChange={onChange}/>);
-  expect(screen.getByText(/探索時勝率：75.0%/)).toHaveTextContent('全6配置を同一乱数条件で比較済み');
+  expect(screen.getByText(/事前選別勝率：75.0%/)).toHaveTextContent('全6配置を同一乱数条件で事前比較済み');
   fireEvent.change(screen.getByRole('combobox',{name:'大将に配置する武将'}),{target:{value:'丙'}});
   expect(onChange).toHaveBeenCalledWith({officers:['丙','乙','甲'],awaken:[3,2,1],unit:'騎馬',skills:['C1','C2','B1','B2','A1','A2']});
  });

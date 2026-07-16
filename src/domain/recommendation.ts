@@ -2,7 +2,7 @@ import {formationSchema,troopTypes,type Formation} from './schemas';
 import {calculateTroopLevel,type UnitLevelRule,type UnitType} from './formationRules';
 import type {CanonicalOfficer} from '../services/canonicalOfficerCatalog';
 import type {CanonicalSkill} from '../services/canonicalSkillCatalog';
-import type {RuntimeResult} from '../runtime/contracts';
+import type {RuntimeFormation,RuntimeResult} from '../runtime/contracts';
 import {ENGINE_DISPLAY_NAME} from './engineBrand';
 
 export type CandidateSpec={
@@ -21,12 +21,25 @@ export type RoleComparison={
  selected_rank?:number;
 };
 
+export type BattleEvidence={
+ status?:string;
+ measurement_stage?:string;
+ requested_battles?:number;
+ completed_battles?:number;
+ wins?:number;
+ losses?:number;
+ draws?:number;
+ runtime_failure_count?:number;
+ reasons?:string[];
+};
+
 export type RoleVariant={
  candidate:CandidateSpec;
  min_win_rate?:number;
  avg_win_rate?:number;
  win_rates?:Record<string,number>;
  hp_diffs?:Record<string,number>;
+ battle_evidence?:Record<string,BattleEvidence>;
  structural_score?:number;
  formal_status?:string;
  assignment?:unknown[];
@@ -66,6 +79,15 @@ export type SearchScope={
  known_awaken_override_count?:number;
  formal_attachable_exclusions?:Array<{name?:string;reasons?:string[]}>;
  combination_policy?:string;
+ screening_battles_per_placement?:number;
+ screening_invalid_count?:number;
+ screening_invalid_reasons?:Record<string,number>;
+ target_formal_stops?:Array<{target_id?:string;reason?:string;detail?:string}>;
+ final_evaluation_requested?:number;
+ final_evaluation_completed?:number;
+ final_evaluation_failed?:number;
+ final_battles_per_candidate?:number;
+ ranking_measurement_policy?:string;
 };
 
 export const roleLabels=['大将','副将1','副将2'] as const;
@@ -80,6 +102,18 @@ function tupleOfAwaken(value:unknown):[number,number,number]|null{
  const parsed=value.map(item=>Number(item));
  if(parsed.some(item=>!Number.isInteger(item)||item<0||item>5))return null;
  return parsed as [number,number,number];
+}
+
+function finiteNumber(value:unknown):number|undefined{return typeof value==='number'&&Number.isFinite(value)?value:undefined;}
+function finiteNumberRecord(value:unknown):Record<string,number>|undefined{
+ if(!value||typeof value!=='object'||Array.isArray(value))return undefined;
+ const rows=Object.entries(value).flatMap(([key,item])=>{const parsed=finiteNumber(item);return parsed===undefined?[]:[[key,parsed] as const];});
+ return rows.length?Object.fromEntries(rows):undefined;
+}
+function battleEvidenceRecord(value:unknown):Record<string,BattleEvidence>|undefined{
+ if(!value||typeof value!=='object'||Array.isArray(value))return undefined;
+ const rows=Object.entries(value).flatMap(([key,item])=>item&&typeof item==='object'&&!Array.isArray(item)?[[key,item as BattleEvidence] as const]:[]);
+ return rows.length?Object.fromEntries(rows):undefined;
 }
 
 export function parseCandidateSpec(value:unknown):CandidateSpec|null{
@@ -121,11 +155,12 @@ function parseRoleVariant(raw:unknown):RoleVariant|null{
  if(!candidate)return null;
  return {
   candidate,
-  min_win_rate:typeof row.min_win_rate==='number'?row.min_win_rate:undefined,
-  avg_win_rate:typeof row.avg_win_rate==='number'?row.avg_win_rate:undefined,
-  win_rates:row.win_rates&&typeof row.win_rates==='object'?row.win_rates as Record<string,number>:undefined,
-  hp_diffs:row.hp_diffs&&typeof row.hp_diffs==='object'?row.hp_diffs as Record<string,number>:undefined,
-  structural_score:typeof row.structural_score==='number'?row.structural_score:undefined,
+  min_win_rate:finiteNumber(row.min_win_rate),
+  avg_win_rate:finiteNumber(row.avg_win_rate),
+  win_rates:finiteNumberRecord(row.win_rates),
+  hp_diffs:finiteNumberRecord(row.hp_diffs),
+  battle_evidence:battleEvidenceRecord(row.battle_evidence),
+  structural_score:finiteNumber(row.structural_score),
   formal_status:typeof row.formal_status==='string'?row.formal_status:undefined,
   assignment:Array.isArray(row.assignment)?row.assignment:undefined,
  };
@@ -142,9 +177,12 @@ export function buildRecommendationReasons(item:RankedRecommendation,index:numbe
  const targetRate=item.win_rates?.[targetId];
  const measured=typeof targetRate==='number'?targetRate:item.avg_win_rate??item.min_win_rate;
  reasons.push(`${ENGINE_DISPLAY_NAME}の対象勝率・平均勝率・残存兵力差・構造スコアによる順位付けで、評価済み候補中${index+1}位です。`);
- if(typeof measured==='number')reasons.push(`選択した編成に対する計測勝率は${percent(measured)}です。`);
+ const evidence=item.battle_evidence?.[targetId];
+ const final100=evidence?.status==='COMPLETE'&&evidence.measurement_stage==='FINAL'&&evidence.completed_battles===100;
+ if(typeof measured==='number')reasons.push(final100?`選択した編成に対する100戦の実測勝率は${percent(measured)}です。`:`選択した編成に対する事前選別勝率は${percent(measured)}です。`);
  const hp=item.hp_diffs?.[targetId];
- if(typeof hp==='number')reasons.push(`平均HP差は${hp>=0?'+':''}${hp.toFixed(1)}で、勝敗だけでなく残存兵力差も評価しています。`);
+ if(typeof hp==='number')reasons.push(`${final100?'100戦の':'事前選別の'}平均HP差は${hp>=0?'+':''}${hp.toFixed(1)}です。`);
+ if(final100)reasons.push(`内訳は${evidence.wins??0}勝・${evidence.losses??0}敗・${evidence.draws??0}引分で、完了100戦だけを集計しています。`);
  if(item.formal_status?.startsWith('FORMAL_EVAL_READY'))reasons.push('正本データとの整合性確認を通過した候補です。');
  if(item.role_comparison?.complete)reasons.push(`同じ3武将の大将・副将全${item.role_comparison.placements_simulated??6}配置を同一乱数条件で比較し、最良の役割順を選定しています。`);
  else if(typeof item.role_comparison?.placements_simulated==='number')reasons.push(`役割配置は${item.role_comparison.placements_simulated}件を比較しましたが、正本条件を満たさない配置は除外しています。`);
@@ -217,4 +255,64 @@ export function recommendationToFormation(
   createdAt:now,
   updatedAt:now,
  });
+}
+
+export function candidateToRuntimeFormation(
+ candidate:CandidateSpec,
+ officers:readonly CanonicalOfficer[],
+ skills:readonly CanonicalSkill[],
+ rule:UnitLevelRule={baseLevel:5,defaultCap:10,capUnlockMode:'unbounded'},
+):RuntimeFormation{
+ const byName=new Map(officers.map(officer=>[officer.name,officer]));
+ const warriors=candidate.officers.map((name,index)=>({
+  id:`runtime-${index}`,
+  name,
+  limitBreak:candidate.awaken[index],
+  inherentSkill:byName.get(name)?.inherentSkill??'未確認',
+  equippedSkills:[candidate.skills[index*2],candidate.skills[index*2+1]] as [string,string],
+ })) as Formation['warriors'];
+ const unitLevel=candidate.unit_level??calculateTroopLevel(candidate.unit,warriors,officers,skills,rule).level;
+ return {officers:candidate.officers,awaken:candidate.awaken,unit:candidate.unit,unit_level:unitLevel,troops:10000,skills:candidate.skills,fixed_placement:true,ignore_formal_overlap:true};
+}
+
+export type FinalRecommendationEvaluation={candidate:CandidateSpec;result:RuntimeResult};
+
+function candidateKey(candidate:CandidateSpec):string{return JSON.stringify([candidate.officers,candidate.awaken,candidate.skills,candidate.unit]);}
+function record(value:unknown):Record<string,unknown>|null{return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:null;}
+
+function finalEvidence(result:RuntimeResult):BattleEvidence|null{
+ const evaluation=record(result.battle_evaluation),summary=record(evaluation?.summary);
+ const requested=finiteNumber(summary?.requestedBattles),completed=finiteNumber(summary?.completedBattles),wins=finiteNumber(summary?.wins),losses=finiteNumber(summary?.losses),draws=finiteNumber(summary?.draws);
+ const rate=finiteNumber(result.win_rate),hp=finiteNumber(result.hp_diff);
+ if(requested!==100||completed!==100||wins===undefined||losses===undefined||draws===undefined||wins+losses+draws!==100||rate===undefined||rate<0||rate>1||hp===undefined)return null;
+ if(Math.abs(rate-wins/100)>1e-9)return null;
+ return {status:'COMPLETE',measurement_stage:'FINAL',requested_battles:100,completed_battles:100,wins,losses,draws,runtime_failure_count:0,reasons:[]};
+}
+
+export function applyFinalRecommendationEvaluations(result:RuntimeResult,targetId:string,evaluations:FinalRecommendationEvaluation[]):RuntimeResult{
+ const byCandidate=new Map(evaluations.map(row=>[candidateKey(row.candidate),row.result]));
+ const rawRanked=Array.isArray(result.ranked)?result.ranked:[];
+ const finalized=rawRanked.flatMap(raw=>{
+  const parsed=parseRoleVariant(raw),source=record(raw);
+  if(!parsed||!source)return [];
+  const measurement=byCandidate.get(candidateKey(parsed.candidate)),evidence=measurement&&finalEvidence(measurement);
+  if(!measurement||!evidence)return [];
+  const rate=measurement.win_rate!,hp=measurement.hp_diff!;
+  const patched:Record<string,unknown>={...source,win_rates:{...(finiteNumberRecord(source.win_rates)??{}),[targetId]:rate},hp_diffs:{...(finiteNumberRecord(source.hp_diffs)??{}),[targetId]:hp},min_win_rate:rate,avg_win_rate:rate,battle_evidence:{...(battleEvidenceRecord(source.battle_evidence)??{}),[targetId]:evidence}};
+  if(Array.isArray(source.role_variants))patched.role_variants=source.role_variants.map(variant=>{
+   const parsedVariant=parseRoleVariant(variant),variantRow=record(variant);
+   if(!parsedVariant||!variantRow||candidateKey(parsedVariant.candidate)!==candidateKey(parsed.candidate))return variant;
+   return {...variantRow,win_rates:{...(finiteNumberRecord(variantRow.win_rates)??{}),[targetId]:rate},hp_diffs:{...(finiteNumberRecord(variantRow.hp_diffs)??{}),[targetId]:hp},min_win_rate:rate,avg_win_rate:rate,battle_evidence:{...(battleEvidenceRecord(variantRow.battle_evidence)??{}),[targetId]:evidence}};
+  });
+  return [patched];
+ });
+ finalized.sort((a,b)=>{
+  const ar=finiteNumber((a as Record<string,unknown>).min_win_rate)??-1,br=finiteNumber((b as Record<string,unknown>).min_win_rate)??-1;
+  if(br!==ar)return br-ar;
+  const ah=finiteNumberRecord((a as Record<string,unknown>).hp_diffs)?.[targetId]??Number.NEGATIVE_INFINITY,bh=finiteNumberRecord((b as Record<string,unknown>).hp_diffs)?.[targetId]??Number.NEGATIVE_INFINITY;
+  return bh-ah;
+ });
+ const requested=evaluations.length;
+ const scope={...(record(result.search_scope)??{}),preliminary_candidate_count:rawRanked.length,final_evaluation_requested:requested,final_evaluation_completed:finalized.length,final_evaluation_failed:Math.max(0,requested-finalized.length),final_battles_per_candidate:100,ranking_measurement_policy:'ONLY_THE_SCREENING_WINNER_IS_DISPLAYED_AFTER_A_COMPLETED_BROWSER_STREAMED_100_BATTLE_RESULT'};
+ return {...result,search_status:finalized.length?'FINAL_100_COMPLETE':'NO_VALID_FINAL_100_MEASUREMENTS',search_scope:scope,ranked:finalized};
 }

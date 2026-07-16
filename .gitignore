@@ -3,6 +3,9 @@ dist/
 public/pyodide/
 public/runtime_bundle_b223.tgz
 public/runtime_bundle_b223.manifest.json
+public/canonical_officer_catalog.json
+public/canonical_officer_stats_catalog.json
+public/canonical_skill_catalog.json
 coverage/
 test-results/
 playwright-report/

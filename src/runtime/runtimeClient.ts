@@ -157,7 +157,7 @@ export class RuntimeClient{
   throw lastError instanceof Error?lastError:new Error(`${outcome==='win'?'勝ち':'負け'}例の詳細traceを取得できませんでした`);
  }
 
- private async calculateBatched(requestValue:CalculateRequest,onProgress?:((progress:BattleCalculationProgress)=>void)):Promise<RuntimeResult>{
+ private async calculateBatched(requestValue:CalculateRequest,onProgress?:((progress:BattleCalculationProgress)=>void),includeExamples=true):Promise<RuntimeResult>{
   const request=calculateRequestSchema.parse(requestValue),generation=this.generation,started=Date.now();
   const forward=emptyAggregate(),reverse=emptyAggregate();let completedPerDirection=0,forwardSeed=request.seed,reverseSeed=request.seed+5003;let firstBatch:CalculateBatchResult|undefined;
   while(completedPerDirection<TOTAL_PER_DIRECTION){
@@ -177,7 +177,7 @@ export class RuntimeClient{
   const wins=forward.leftWins+reverse.rightWins,losses=forward.rightWins+reverse.leftWins,draws=forward.draws+reverse.draws,completed=wins+losses+draws;
   if(completed!==100)throw new Error(`100戦の集計件数が一致しません（${completed}戦）`);
   const winRate=wins/completed,hpDiff=(forward.candidateHpSum+reverse.candidateHpSum)/completed;
-  const samples=[...forward.samples,...reverse.samples],outcomes:Exclude<Outcome,'draw'>[]=[];if(wins>0)outcomes.push('win');if(losses>0)outcomes.push('loss');
+  const samples=[...forward.samples,...reverse.samples],outcomes:Exclude<Outcome,'draw'>[]=[];if(includeExamples&&wins>0)outcomes.push('win');if(includeExamples&&losses>0)outcomes.push('loss');
   const examples=[];
   for(const outcome of outcomes){
    try{examples.push(await this.detailForOutcome(request,outcome,samples,generation));}
@@ -197,7 +197,10 @@ export class RuntimeClient{
 
  calculate(request:CalculateRequest,onProgress?:((progress:BattleCalculationProgress)=>void)){
   const retry=()=>{void this.calculate(request,onProgress);};
-  return this.calculateBatched(request,onProgress).catch(error=>{if(error instanceof RuntimeCancelledError)throw error;throw notifyRuntimeError(error,retry);});
+  return this.calculateBatched(request,onProgress,true).catch(error=>{if(error instanceof RuntimeCancelledError)throw error;throw notifyRuntimeError(error,retry);});
+ }
+ calculateSummary(request:CalculateRequest,onProgress?:((progress:BattleCalculationProgress)=>void)){
+  return this.calculateBatched(request,onProgress,false);
  }
  detail(request:BattleDetailRequest){return this.runPublic('detail',request);}
  search(request:unknown){return this.runPublic('search',request);}
