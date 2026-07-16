@@ -172,8 +172,7 @@ export function FormationEditor({initial,initialImageImportOpen=false,warriors=[
   if(duplicate)setWarning({title:'画像内の装着戦法が重複しています',message:`「${duplicate.name}」は${slotLabel(duplicate.first)}と${slotLabel(duplicate.duplicate)}で重複しています。画像解析結果を確認してください。`});
  }
 
- async function submit(e:React.FormEvent){
-  e.preventDefault();
+ async function submit(){
   for(let warriorIndex=0;warriorIndex<value.warriors.length;warriorIndex++){
    const warrior=value.warriors[warriorIndex];if(!warrior)continue;
    for(let skillIndex=0;skillIndex<warrior.equippedSkills.length;skillIndex++){
@@ -206,7 +205,7 @@ export function FormationEditor({initial,initialImageImportOpen=false,warriors=[
   : '対象兵種の兵種Lv効果なし';
  const capDetails=troopLevel.capUnlocked?'上限解放済み・天井なし':`上限${troopLevel.cap}`;
 
- return <form onSubmit={e=>void submit(e)} className="space-y-4">
+ return <form onSubmit={event=>event.preventDefault()} className="space-y-4">
   <ImageFormationImporter initialOpen={initialImageImportOpen} officers={officerCatalog} skills={skillCatalog} ownedWarriors={warriors} onApply={applyImageImport}/>
   <section className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
    <h2 className="mb-4 text-lg font-bold">編成編集</h2>
@@ -243,7 +242,7 @@ export function FormationEditor({initial,initialImageImportOpen=false,warriors=[
    </section>;
   })}
   {error&&<p role="alert" className="text-red-400">{error}</p>}
-  <div className="grid grid-cols-2 gap-3"><Button type="button" variant="secondary" onClick={onCancel}>キャンセル</Button><Button type="submit">保存</Button></div>
+  <div className="grid grid-cols-2 gap-3"><Button type="button" variant="secondary" onClick={onCancel}>キャンセル</Button><Button type="button" onClick={()=>void submit()}>保存</Button></div>
   {warning&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-5" role="alertdialog" aria-modal="true" aria-labelledby="formation-warning-title" aria-describedby="formation-warning-message">
    <div className="w-full max-w-sm rounded-2xl border border-amber-500 bg-slate-900 p-5 shadow-2xl">
     <h2 id="formation-warning-title" className="text-lg font-bold text-amber-400">{warning.title}</h2>

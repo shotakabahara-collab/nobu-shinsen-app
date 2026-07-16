@@ -133,6 +133,24 @@ describe('FormationEditor',()=>{
   expect(duplicate).toHaveValue('');
  });
 
+ it('does not save or close when iPhone implicitly submits after changing a skill',async()=>{
+  const value=completeFormation();
+  value.warriors[0].equippedSkills[0]='回天転運';
+  const save=vi.fn();
+  render(editor({initial:value,onSave:save}));
+  const skill=screen.getByRole('combobox',{name:'大将 装着戦法1'});
+  fireEvent.change(skill,{target:{value:'紅蓮'}});
+  fireEvent.pointerDown(screen.getByRole('option',{name:/紅蓮の炎/}));
+  expect(skill).toHaveValue('紅蓮の炎');
+
+  fireEvent.submit(skill.closest('form')!);
+  expect(save).not.toHaveBeenCalled();
+  expect(skill).toHaveValue('紅蓮の炎');
+
+  fireEvent.click(screen.getByRole('button',{name:'保存'}));
+  await waitFor(()=>expect(save).toHaveBeenCalledTimes(1));
+ });
+
  it('blocks saving a legacy formation that already contains duplicate equipped skills',()=>{
   const value=completeFormation();
   value.warriors[2].equippedSkills[1]=value.warriors[0].equippedSkills[0];
