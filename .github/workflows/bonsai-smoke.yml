@@ -23,24 +23,46 @@ jobs:
         with:
           node-version: 22
       - name: Validate BONSAI application
+        id: validate
+        continue-on-error: true
         run: |
-          node <<'NODE'
+          node <<'NODE' > bonsai-validation.txt 2>&1
           const fs=require('fs');
-          const path='public/bonsai';
-          const html=fs.readFileSync(`${path}/index.html`,'utf8');
-          const sw=fs.readFileSync(`${path}/sw.js`,'utf8');
-          const manifest=JSON.parse(fs.readFileSync(`${path}/manifest.webmanifest`,'utf8'));
-          const match=html.match(/<script>([\s\S]*)<\/script>/);
-          if(!match) throw new Error('inline application script missing');
-          new Function(match[1]);
-          const required=['BONSAI','confirmPrune','この操作は取り消せません','enterShow','localStorage','serviceWorker.register'];
-          for(const text of required) if(!html.includes(text)) throw new Error(`missing: ${text}`);
-          if(manifest.short_name!=='BONSAI'||manifest.display!=='standalone'||manifest.start_url!=='./') throw new Error('manifest invalid');
-          for(const text of ['caches.open','index.html','manifest.webmanifest','icon.svg']) if(!sw.includes(text)) throw new Error(`service worker missing: ${text}`);
-          console.log('BONSAI syntax: PASS');
-          console.log('BONSAI irreversible pruning: PASS');
-          console.log('BONSAI PWA assets: PASS');
+          try {
+            const path='public/bonsai';
+            const html=fs.readFileSync(`${path}/index.html`,'utf8');
+            const sw=fs.readFileSync(`${path}/sw.js`,'utf8');
+            const manifest=JSON.parse(fs.readFileSync(`${path}/manifest.webmanifest`,'utf8'));
+            const match=html.match(/<script>([\s\S]*)<\/script>/);
+            if(!match) throw new Error('inline application script missing');
+            new Function(match[1]);
+            const required=['BONSAI','confirmPrune','この操作は取り消せません','enterShow','localStorage','serviceWorker.register'];
+            for(const text of required) if(!html.includes(text)) throw new Error(`missing: ${text}`);
+            if(manifest.short_name!=='BONSAI'||manifest.display!=='standalone'||manifest.start_url!=='./') throw new Error('manifest invalid');
+            for(const text of ['caches.open','index.html','manifest.webmanifest','icon.svg']) if(!sw.includes(text)) throw new Error(`service worker missing: ${text}`);
+            console.log('BONSAI syntax: PASS');
+            console.log('BONSAI irreversible pruning: PASS');
+            console.log('BONSAI PWA assets: PASS');
+          } catch (error) {
+            console.error(error && error.stack ? error.stack : String(error));
+            process.exitCode=1;
+          }
           NODE
+          code=$?
+          echo "$code" > bonsai-validation-code.txt
+          cat bonsai-validation.txt
+          exit "$code"
+      - name: Upload validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bonsai-validation
+          path: |
+            bonsai-validation.txt
+            bonsai-validation-code.txt
+      - name: Fail on validation error
+        if: steps.validate.outcome == 'failure'
+        run: exit 1
       - name: Verify static HTTP delivery
         run: |
           python3 -m http.server 4173 --directory public >/tmp/bonsai-http.log 2>&1 &
