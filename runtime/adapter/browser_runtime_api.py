@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import copy, gc, itertools, json, time
+import copy, gc, itertools, json, math, time
 from custom_evaluate import load_context, resolve_officers_by_awaken_values, resolve_skills, build_best, public_best
 from battle_simulator import simulate_many_balanced
 from operational_runtime_overlay import audit_best, install_runtime_overlay
@@ -34,6 +34,62 @@ def _make(spec):
         result['formal_status']='OPERATIONAL_ONLY_RUNTIME_EVIDENCE_INCOMPLETE'
     return result
 
+def _balanced_battle_evidence(sim, requested_trials, requested_blocks):
+    """Reject the protected runtime's 0/0 sentinel when no battle completed.
+
+    The canonical simulator intentionally isolates failed trials and uses zero for
+    empty aggregates.  Zero wins or a zero HP difference can also be a legitimate
+    result, so validity must come from completed trial evidence, never the values.
+    """
+    blocks=max(1,int(requested_blocks));per=max(1,int(requested_trials)//blocks)
+    expected_per_direction=per*blocks;expected_total=expected_per_direction*2
+    forward=sim.get('forward') if isinstance(sim,dict) else None
+    reverse=sim.get('reverse') if isinstance(sim,dict) else None
+    reasons=[];completed=0;wins=0;losses=0;draws=0;failure_count=0
+    if not isinstance(forward,list) or not isinstance(reverse,list):
+        reasons.append('BALANCED_BLOCKS_MISSING')
+        forward=[];reverse=[]
+    if len(forward)!=blocks or len(reverse)!=blocks:
+        reasons.append('BALANCED_BLOCK_COUNT_MISMATCH')
+    for direction,rows in (('forward',forward),('reverse',reverse)):
+        for row in rows:
+            if not isinstance(row,dict):
+                reasons.append(f'{direction.upper()}_BLOCK_INVALID');continue
+            requested=int(row.get('trials') or per);done=int(row.get('completed_trials') or 0)
+            completed+=done
+            failures=row.get('runtime_failures') or []
+            failure_count+=len(failures) if isinstance(failures,list) else 1
+            if done!=requested:reasons.append(f'{direction.upper()}_INCOMPLETE_TRIALS')
+            if failures:reasons.append(f'{direction.upper()}_RUNTIME_FAILURES')
+            left_wins=int(row.get('left_wins') or 0);right_wins=int(row.get('right_wins') or 0);row_draws=int(row.get('draws') or 0)
+            if left_wins+right_wins+row_draws!=done:reasons.append(f'{direction.upper()}_OUTCOME_COUNT_MISMATCH')
+            if direction=='forward':wins+=left_wins;losses+=right_wins
+            else:wins+=right_wins;losses+=left_wins
+            draws+=row_draws
+    if completed!=expected_total:reasons.append('BALANCED_COMPLETED_TOTAL_MISMATCH')
+    win_rate=sim.get('left_balanced_win_rate') if isinstance(sim,dict) else None
+    hp_diff=sim.get('avg_hp_diff_balanced') if isinstance(sim,dict) else None
+    if not isinstance(win_rate,(int,float)) or isinstance(win_rate,bool) or not math.isfinite(float(win_rate)):
+        reasons.append('WIN_RATE_MISSING_OR_NONFINITE')
+    if not isinstance(hp_diff,(int,float)) or isinstance(hp_diff,bool) or not math.isfinite(float(hp_diff)):
+        reasons.append('HP_DIFF_MISSING_OR_NONFINITE')
+    unique_reasons=list(dict.fromkeys(reasons))
+    return {
+        'status':'COMPLETE' if not unique_reasons else 'INVALID',
+        'measurement_stage':'SCREENING',
+        'requested_battles':expected_total,
+        'completed_battles':completed,
+        'wins':wins,'losses':losses,'draws':draws,
+        'runtime_failure_count':failure_count,
+        'reasons':unique_reasons,
+    }
+
+def _require_balanced_battle_evidence(sim, trials, blocks, label):
+    evidence=_balanced_battle_evidence(sim,trials,blocks)
+    if evidence['status']!='COMPLETE':
+        raise RuntimeError(f'{label}: BALANCED_BATTLE_EVIDENCE_STOP '+json.dumps(evidence,ensure_ascii=False))
+    return evidence
+
 TARGETS={
 'YAMAGATA':{'officers':['山県昌景','飯富虎昌','真田昌幸'],'awaken':[5,5,2],'unit':'騎馬','skills':['矢石飛交','血戦奮闘','赤備え隊','理非曲直','瞬息万変','帰還の凱歌']},
 'KURODA':{'officers':['黒田官兵衛','豊臣秀吉','ねね'],'awaken':[3,1,3],'unit':'弓','skills':['七十二の計','紅蓮の炎','三河弓兵隊','嚢沙之計','罵詈雑言','沈魚落雁']},
@@ -54,7 +110,8 @@ def evaluate_request(request_json):
     candidate=_make(req['candidate']); target=_make(req.get('target_spec') or TARGETS[req['target']])
     trials=max(1,min(int(req.get('trials',10)),100));blocks=max(1,min(int(req.get('blocks',1)),3));seed=int(req.get('seed',1326230000));started=time.time()
     sim=simulate_many_balanced(_ctx(),copy.deepcopy(candidate),copy.deepcopy(target),trials=trials,seed=seed,blocks=blocks)
-    return json.dumps({'type':'simulation','version':'adapter-v1','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','target':req.get('target','CUSTOM'),'trials_per_direction':trials,'blocks':blocks,'win_rate':sim.get('left_balanced_win_rate'),'hp_diff':sim.get('avg_hp_diff_balanced'),'elapsed_seconds':round(time.time()-started,3),'candidate_assignment':candidate.get('attach_assignment'),'formal_status':candidate.get('formal_status'),'runtime_overlay_audit':candidate.get('runtime_overlay_audit'),'sim':sim if req.get('include_detail') else None},ensure_ascii=False)
+    evidence=_require_balanced_battle_evidence(sim,trials,blocks,'calculate')
+    return json.dumps({'type':'simulation','version':'adapter-v1','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','target':req.get('target','CUSTOM'),'trials_per_direction':trials,'blocks':blocks,'win_rate':sim.get('left_balanced_win_rate'),'hp_diff':sim.get('avg_hp_diff_balanced'),'battle_evidence':evidence,'elapsed_seconds':round(time.time()-started,3),'candidate_assignment':candidate.get('attach_assignment'),'formal_status':candidate.get('formal_status'),'runtime_overlay_audit':candidate.get('runtime_overlay_audit'),'sim':sim if req.get('include_detail') else None},ensure_ascii=False)
 
 def _base_variants(seed, owned_pool, swap_depth):
     yield seed
@@ -586,7 +643,8 @@ def formalize_request(request_json):
     for ti,t in enumerate(targets):
         tar=_make(t['spec'])
         sim=simulate_many_balanced(_ctx(),copy.deepcopy(candidate),copy.deepcopy(tar),trials=trials,seed=seed0+ti*1000,blocks=blocks)
-        results[t['id']]={'win_rate':sim.get('left_balanced_win_rate'),'hp_diff':sim.get('avg_hp_diff_balanced'),'trials_per_direction':trials,'blocks':blocks}
+        evidence=_require_balanced_battle_evidence(sim,trials,blocks,f"formal target={t['id']}")
+        results[t['id']]={'win_rate':sim.get('left_balanced_win_rate'),'hp_diff':sim.get('avg_hp_diff_balanced'),'trials_per_direction':trials,'blocks':blocks,'battle_evidence':evidence}
     vals=[x['win_rate'] for x in results.values() if isinstance(x.get('win_rate'),(int,float))]
     return json.dumps({'type':'formal_recheck','version':'adapter-v1','runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','verification_level':f'{trials}x{blocks}_BALANCED','candidate':req['candidate'],'targets':results,'min_win_rate':min(vals) if vals else None,'avg_win_rate':sum(vals)/len(vals) if vals else None,'elapsed_seconds':round(time.time()-started,3),'runtime_overlay_audit':candidate.get('runtime_overlay_audit')},ensure_ascii=False)
 
@@ -601,7 +659,7 @@ def optimize_request(request_json):
     search_mode=str(req.get('search_mode') or 'strongest')
     beam_audit_requested=bool(req.get('beam_recall_audit',False))
     trials=max(1,min(int(req.get('trials',2)),10));blocks=max(1,min(int(req.get('blocks',1)),2));seed0=int(req.get('seed',1326237000))
-    structural=[];seen=set();stopped=0;budget_cut=False;started=time.time();variant_count=0;family_expected={};catalog_details={};admitted_officers=set();admitted_skills=set();stop_reasons={}
+    structural=[];seen=set();stopped=0;budget_cut=False;started=time.time();variant_count=0;family_expected={};catalog_details={};admitted_officers=set();admitted_skills=set();stop_reasons={};screening_invalid=0;screening_invalid_reasons={}
     beam_audit=_beam_recall_audit([x.get('name') if isinstance(x,dict) else str(x) for x in skill_pool],beam_width) if not global_catalog and beam_audit_requested and skill_swap_depth>=3 else {'performed':False,'reason':'not requested, canonical staged mode, or full rebuild disabled'}
     if global_catalog:
         variants,catalog_details=_canonical_global_variants(req,units)
@@ -683,21 +741,38 @@ def optimize_request(request_json):
             if expanded:expanded_shortlist.append((family_key,expanded))
         family_shortlist=expanded_shortlist
         complete_families={key:items for key,items in family_shortlist if len(items)==6}
-    runtime_targets=[(t['id'],_make(t['spec'])) for t in targets]
+    runtime_targets=[];target_formal_stops=[]
+    for target in targets:
+        target_id=target['id']
+        try:target_runtime=_make(target['spec'])
+        except BaseException as error:
+            target_formal_stops.append({'target_id':target_id,'reason':'EXCEPTION_'+type(error).__name__,'detail':str(error)[:500]});continue
+        target_status=str(target_runtime.get('formal_status') or '')
+        if not target_status.startswith('FORMAL_EVAL_READY'):
+            target_formal_stops.append({'target_id':target_id,'reason':target_status or 'TARGET_FORMAL_STATUS_MISSING','runtime_overlay_audit':target_runtime.get('runtime_overlay_audit')});continue
+        runtime_targets.append((target_id,target_runtime))
     ranked=[];placements_simulated=0
+    if target_formal_stops:family_shortlist=[]
     for fi,(family_key,items) in enumerate(family_shortlist):
         role_rows=[]
         # Common seeds within a family make commander/deputy comparisons fairer:
         # only role order changes, not the random battle sequence.
         for item in items:
             rates={};diffs={};cand=_make(item['spec'])
+            evidence_by_target={};row_valid=True
             for ti,(target_id,tar) in enumerate(runtime_targets):
                 sim=simulate_many_balanced(_ctx(),copy.deepcopy(cand),copy.deepcopy(tar),trials=trials,seed=seed0+fi*1000+ti*100,blocks=blocks)
-                rates[target_id]=sim.get('left_balanced_win_rate');diffs[target_id]=sim.get('avg_hp_diff_balanced')
+                evidence=_balanced_battle_evidence(sim,trials,blocks)
+                if evidence['status']!='COMPLETE':
+                    row_valid=False;screening_invalid+=1
+                    for reason in evidence['reasons']:screening_invalid_reasons[reason]=screening_invalid_reasons.get(reason,0)+1
+                else:
+                    rates[target_id]=sim.get('left_balanced_win_rate');diffs[target_id]=sim.get('avg_hp_diff_balanced');evidence_by_target[target_id]=evidence
                 del sim;gc.collect()
+            if not row_valid:continue
             vals=[v for v in rates.values() if isinstance(v,(int,float))]
             public_spec={key:value for key,value in item['spec'].items() if not key.startswith('_')}
-            role_rows.append({'candidate':public_spec,'structural_score':item['score'],'formal_status':item['formal_status'],'assignment':item['assignment'],'win_rates':rates,'hp_diffs':diffs,'min_win_rate':min(vals) if vals else None,'avg_win_rate':sum(vals)/len(vals) if vals else None})
+            role_rows.append({'candidate':public_spec,'structural_score':item['score'],'formal_status':item['formal_status'],'assignment':item['assignment'],'win_rates':rates,'hp_diffs':diffs,'battle_evidence':evidence_by_target,'min_win_rate':min(vals) if vals else None,'avg_win_rate':sum(vals)/len(vals) if vals else None})
             placements_simulated+=1
         role_rows.sort(key=_rank_key,reverse=True)
         if not role_rows:continue
@@ -707,13 +782,14 @@ def optimize_request(request_json):
         best['role_variants']=role_rows
         ranked.append(best)
     ranked.sort(key=_rank_key,reverse=True)
-    scope={'catalog_scope':catalog_scope,'search_mode':search_mode,'seed_count':len(seeds),'owned_pool_count':len(owned_pool),'swap_depth':swap_depth,'skill_swap_depth':skill_swap_depth,'confirmed_skill_pool_count':len(skill_pool),'skill_beam_width':beam_width,'skill_prefilter_basis':'canonical staged coverage + priority/bucket quality prefilter' if global_catalog else 'adaptive exact 6-8 skills; beam 9+ using canonical optimizer_priority_score + optimizer_bucket','beam_recall_audit':beam_audit,'variant_count':variant_count,'generated':len(seen),'formal_ready':len(structural),'stopped':stopped,'budget':budget,'budget_cut':budget_cut,'units':units,'shortlist_simulated':placements_simulated,'trials_per_direction':trials,'blocks':blocks,'role_selection_policy':'ALL_SIX_ROLE_ORDERS_ATOMIC_COMMON_RANDOM_SEEDS','role_atomic_budget':True,'role_families_generated':len(families),'role_families_complete':len(complete_families),'role_families_shortlisted':len(family_shortlist),'role_placements_simulated':placements_simulated,'role_placements_expected_per_family':6}
+    scope={'catalog_scope':catalog_scope,'search_mode':search_mode,'seed_count':len(seeds),'owned_pool_count':len(owned_pool),'swap_depth':swap_depth,'skill_swap_depth':skill_swap_depth,'confirmed_skill_pool_count':len(skill_pool),'skill_beam_width':beam_width,'skill_prefilter_basis':'canonical staged coverage + priority/bucket quality prefilter' if global_catalog else 'adaptive exact 6-8 skills; beam 9+ using canonical optimizer_priority_score + optimizer_bucket','beam_recall_audit':beam_audit,'variant_count':variant_count,'generated':len(seen),'formal_ready':len(structural),'stopped':stopped,'budget':budget,'budget_cut':budget_cut,'units':units,'shortlist_simulated':placements_simulated,'trials_per_direction':trials,'blocks':blocks,'screening_battles_per_placement':2*max(1,trials//blocks)*blocks,'screening_measurement_policy':'COMPLETED_BATTLES_REQUIRED_ZERO_ZERO_SENTINEL_REJECTED','screening_invalid_count':screening_invalid,'screening_invalid_reasons':screening_invalid_reasons,'target_formal_stops':target_formal_stops,'role_selection_policy':'ALL_SIX_ROLE_ORDERS_ATOMIC_COMMON_RANDOM_SEEDS','role_atomic_budget':True,'role_families_generated':len(families),'role_families_complete':len(complete_families),'role_families_shortlisted':len(family_shortlist),'role_placements_simulated':placements_simulated,'role_placements_expected_per_family':6}
     scope.update(catalog_details)
     if global_catalog:
         scope.update({'officer_formal_admission_count':len(admitted_officers),'skill_formal_admission_count':len(admitted_skills),'formal_stop_reasons':stop_reasons})
     version='adapter-v3-canonical-global-staged' if global_catalog else 'adapter-v2-role-complete'
     claim='CANONICAL_CATALOG_COMPLETE_STAGED_SEARCH_NO_GLOBAL_OPTIMUM_CLAIM' if global_catalog else 'PURPOSE_AWARE_BUDGETED_SEARCH_NO_GLOBAL_OPTIMUM_CLAIM'
-    return json.dumps({'type':'branch_optimizer','version':version,'runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','claim_status':claim,'search_scope':scope,'targets':[t['id'] for t in targets],'ranked':ranked,'elapsed_seconds':round(time.time()-started,3)},ensure_ascii=False)
+    search_status='TARGET_FORMAL_STOP' if target_formal_stops else ('NO_VALID_RUNTIME_MEASUREMENTS' if not ranked else 'SCREENING_COMPLETE')
+    return json.dumps({'type':'branch_optimizer','version':version,'runtime':'B223_CANONICAL_PYTHON_VIA_PYODIDE','claim_status':claim,'search_status':search_status,'search_scope':scope,'targets':[t['id'] for t in targets],'ranked':ranked,'elapsed_seconds':round(time.time()-started,3)},ensure_ascii=False)
 
 # Stable public boundary. These aliases live outside the canonical b223 source.
 calculate = evaluate_request

@@ -95,11 +95,14 @@ test('searches the complete canonical officer and skill catalogs with staged run
  await expect(page.getByText('バックアップを復元しました（編成1件）',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'対戦・提案'}).click();await page.getByLabel('最適化対象').selectOption(target.id);
  await expect(page.getByLabel('探索範囲')).toHaveValue('canonical_all');await page.getByRole('button',{name:'最適編成を探索'}).click();
- await expect(page.getByText('全カタログの段階探索が完了しました。上位候補を表示します',{exact:true})).toBeVisible({timeout:420_000});
+ await expect(page.getByText(/全カタログ探索と上位\d+候補の各100戦評価が完了しました/)).toBeVisible({timeout:540_000});
  const panel=page.getByLabel('最適編成候補');await expect(panel.getByText('全カタログ事前評価 完了',{exact:true})).toBeVisible();
  await expect(panel.getByText(/146\/146武将・236\/236戦法・全34,456関係/)).toBeVisible();
  await expect(panel.getByText(/装着可能115件中、正式候補112件/)).toBeVisible();
- await expect(panel.getByText(/役割配置24件（4編成組）を比較/)).toBeVisible();
+ await expect(panel.getByText(/役割配置24件（4編成組）を事前比較/)).toBeVisible();
+ await expect(panel.getByText(/上位\d+候補は各100戦を完了/)).toBeVisible();
+ await expect(panel.getByText(/100戦勝率/).first()).toBeVisible();
+ await expect(panel.getByText(/勝・.*敗・.*引分（完了100戦）/).first()).toBeVisible();
  await expect(panel.getByText(/候補1/).first()).toBeVisible();await expect(page.getByRole('button',{name:'この役割配置を30×3再評価'})).toBeVisible();
  await expect(page.locator('body')).not.toContainText('RUNTIME-001');await expect(page.locator('body')).not.toContainText('RUNTIME-002');
 });

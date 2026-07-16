@@ -58,6 +58,16 @@ describe('RuntimeClient',()=>{
   expect(progress.at(-1)).toMatchObject({stage:'examples',completedExamples:2,totalExamples:2});
  });
 
+ it('streams an exact 100-battle ranking summary without fetching example traces',async()=>{
+  vi.stubGlobal('Worker',WorkerMock);WorkerMock.responder=successfulResponder;const progress:BattleCalculationProgress[]=[];
+  const result=await new RuntimeClient().calculateSummary({...request,include_detail:false},value=>progress.push(value));
+  const messages=WorkerMock.instances.flatMap(worker=>worker.postMessage.mock.calls.map(call=>call[0] as WorkerMessage));
+  expect(messages.filter(message=>message.type==='calculateBatch')).toHaveLength(5);
+  expect(messages.filter(message=>message.type==='detail')).toHaveLength(0);
+  expect(result).toMatchObject({trials_total:100,win_rate:.6,hp_diff:75,battle_evaluation:{summary:{completedBattles:100,wins:60,losses:40,draws:0},examples:[]}});
+  expect(progress.at(-1)).toMatchObject({stage:'battles',completedBattles:100});
+ });
+
  it('restarts and splits only the failed wasm batch without losing any of the 100 battles',async()=>{
   vi.stubGlobal('Worker',WorkerMock);let failed=false;WorkerMock.responder=(worker,message)=>{
    if(message.type==='calculateBatch'&&!failed){failed=true;worker.fail('new_error@pyodide.asm.js:10 wasm-function[308]');return;}
