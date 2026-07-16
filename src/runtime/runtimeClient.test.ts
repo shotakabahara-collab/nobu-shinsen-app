@@ -68,6 +68,16 @@ describe('RuntimeClient',()=>{
   expect(progress.at(-1)).toMatchObject({stage:'battles',completedBattles:100});
  });
 
+ it('streams a balanced 20-battle tournament screen through one compact batch',async()=>{
+  vi.stubGlobal('Worker',WorkerMock);WorkerMock.responder=successfulResponder;const progress:BattleCalculationProgress[]=[];
+  const result=await new RuntimeClient().calculateSummary({...request,include_detail:false},value=>progress.push(value),20);
+  const messages=WorkerMock.instances.flatMap(worker=>worker.postMessage.mock.calls.map(call=>call[0] as WorkerMessage));
+  expect(messages.filter(message=>message.type==='calculateBatch')).toHaveLength(1);
+  expect(messages.filter(message=>message.type==='detail')).toHaveLength(0);
+  expect(result).toMatchObject({version:'adapter-v2-browser-20-streaming-batches',trials_per_direction:10,trials_total:20,win_rate:.6,hp_diff:75,battle_evaluation:{summary:{requestedBattles:20,completedBattles:20,wins:12,losses:8,draws:0},examples:[]}});
+  expect(progress).toEqual([{stage:'battles',completedBattles:20,totalBattles:20,completedExamples:0,totalExamples:0}]);
+ });
+
  it('restarts and splits only the failed wasm batch without losing any of the 100 battles',async()=>{
   vi.stubGlobal('Worker',WorkerMock);let failed=false;WorkerMock.responder=(worker,message)=>{
    if(message.type==='calculateBatch'&&!failed){failed=true;worker.fail('new_error@pyodide.asm.js:10 wasm-function[308]');return;}

@@ -83,6 +83,11 @@ export type SearchScope={
  screening_invalid_count?:number;
  screening_invalid_reasons?:Record<string,number>;
  target_formal_stops?:Array<{target_id?:string;reason?:string;detail?:string}>;
+ tournament_screen_requested?:number;
+ tournament_screen_completed?:number;
+ tournament_screen_failed?:number;
+ tournament_screen_battles_per_candidate?:number;
+ tournament_finalist_limit?:number;
  final_evaluation_requested?:number;
  final_evaluation_completed?:number;
  final_evaluation_failed?:number;
@@ -183,6 +188,7 @@ export function buildRecommendationReasons(item:RankedRecommendation,index:numbe
  const hp=item.hp_diffs?.[targetId];
  if(typeof hp==='number')reasons.push(`${final100?'100戦の':'事前選別の'}平均HP差は${hp>=0?'+':''}${hp.toFixed(1)}です。`);
  if(final100)reasons.push(`内訳は${evidence.wins??0}勝・${evidence.losses??0}敗・${evidence.draws??0}引分で、完了100戦だけを集計しています。`);
+ if(final100&&typeof scope.tournament_screen_completed==='number')reasons.push(`事前候補${scope.tournament_screen_completed}件を各${scope.tournament_screen_battles_per_candidate??20}戦で再比較し、その上位${scope.final_evaluation_requested??2}件を各100戦で確定評価しています。`);
  if(item.formal_status?.startsWith('FORMAL_EVAL_READY'))reasons.push('正本データとの整合性確認を通過した候補です。');
  if(item.role_comparison?.complete)reasons.push(`同じ3武将の大将・副将全${item.role_comparison.placements_simulated??6}配置を同一乱数条件で比較し、最良の役割順を選定しています。`);
  else if(typeof item.role_comparison?.placements_simulated==='number')reasons.push(`役割配置は${item.role_comparison.placements_simulated}件を比較しましたが、正本条件を満たさない配置は除外しています。`);
@@ -276,20 +282,31 @@ export function candidateToRuntimeFormation(
 }
 
 export type FinalRecommendationEvaluation={candidate:CandidateSpec;result:RuntimeResult};
+export type RecommendationTournamentAudit={requested:number;completed:number;failed:number;battlesPerCandidate:number;finalistLimit:number;finalRequested:number};
 
 function candidateKey(candidate:CandidateSpec):string{return JSON.stringify([candidate.officers,candidate.awaken,candidate.skills,candidate.unit]);}
 function record(value:unknown):Record<string,unknown>|null{return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:null;}
 
-function finalEvidence(result:RuntimeResult):BattleEvidence|null{
+function completedEvidence(result:RuntimeResult,battles:number,stage:string):BattleEvidence|null{
  const evaluation=record(result.battle_evaluation),summary=record(evaluation?.summary);
  const requested=finiteNumber(summary?.requestedBattles),completed=finiteNumber(summary?.completedBattles),wins=finiteNumber(summary?.wins),losses=finiteNumber(summary?.losses),draws=finiteNumber(summary?.draws);
  const rate=finiteNumber(result.win_rate),hp=finiteNumber(result.hp_diff);
- if(requested!==100||completed!==100||wins===undefined||losses===undefined||draws===undefined||wins+losses+draws!==100||rate===undefined||rate<0||rate>1||hp===undefined)return null;
- if(Math.abs(rate-wins/100)>1e-9)return null;
- return {status:'COMPLETE',measurement_stage:'FINAL',requested_battles:100,completed_battles:100,wins,losses,draws,runtime_failure_count:0,reasons:[]};
+ if(requested!==battles||completed!==battles||wins===undefined||losses===undefined||draws===undefined||wins+losses+draws!==battles||rate===undefined||rate<0||rate>1||hp===undefined)return null;
+ if(Math.abs(rate-wins/battles)>1e-9)return null;
+ return {status:'COMPLETE',measurement_stage:stage,requested_battles:battles,completed_battles:battles,wins,losses,draws,runtime_failure_count:0,reasons:[]};
 }
 
-export function applyFinalRecommendationEvaluations(result:RuntimeResult,targetId:string,evaluations:FinalRecommendationEvaluation[]):RuntimeResult{
+function finalEvidence(result:RuntimeResult):BattleEvidence|null{return completedEvidence(result,100,'FINAL');}
+
+export function rankCompletedRecommendationEvaluations(evaluations:FinalRecommendationEvaluation[],battles:number):FinalRecommendationEvaluation[]{
+ return evaluations.filter(row=>completedEvidence(row.result,battles,'TOURNAMENT_SCREEN')).sort((a,b)=>{
+  const rateDiff=(b.result.win_rate??-1)-(a.result.win_rate??-1);if(rateDiff)return rateDiff;
+  const hpDiff=(b.result.hp_diff??Number.NEGATIVE_INFINITY)-(a.result.hp_diff??Number.NEGATIVE_INFINITY);if(hpDiff)return hpDiff;
+  return candidateKey(a.candidate).localeCompare(candidateKey(b.candidate),'ja');
+ });
+}
+
+export function applyFinalRecommendationEvaluations(result:RuntimeResult,targetId:string,evaluations:FinalRecommendationEvaluation[],tournament?:RecommendationTournamentAudit):RuntimeResult{
  const byCandidate=new Map(evaluations.map(row=>[candidateKey(row.candidate),row.result]));
  const rawRanked=Array.isArray(result.ranked)?result.ranked:[];
  const finalized=rawRanked.flatMap(raw=>{
@@ -312,7 +329,8 @@ export function applyFinalRecommendationEvaluations(result:RuntimeResult,targetI
   const ah=finiteNumberRecord((a as Record<string,unknown>).hp_diffs)?.[targetId]??Number.NEGATIVE_INFINITY,bh=finiteNumberRecord((b as Record<string,unknown>).hp_diffs)?.[targetId]??Number.NEGATIVE_INFINITY;
   return bh-ah;
  });
- const requested=evaluations.length;
- const scope={...(record(result.search_scope)??{}),preliminary_candidate_count:rawRanked.length,final_evaluation_requested:requested,final_evaluation_completed:finalized.length,final_evaluation_failed:Math.max(0,requested-finalized.length),final_battles_per_candidate:100,ranking_measurement_policy:'ONLY_THE_SCREENING_WINNER_IS_DISPLAYED_AFTER_A_COMPLETED_BROWSER_STREAMED_100_BATTLE_RESULT'};
+ const requested=tournament?.finalRequested??evaluations.length;
+ const tournamentScope=tournament?{tournament_screen_requested:tournament.requested,tournament_screen_completed:tournament.completed,tournament_screen_failed:tournament.failed,tournament_screen_battles_per_candidate:tournament.battlesPerCandidate,tournament_finalist_limit:tournament.finalistLimit}:{};
+ const scope={...(record(result.search_scope)??{}),...tournamentScope,preliminary_candidate_count:rawRanked.length,final_evaluation_requested:requested,final_evaluation_completed:finalized.length,final_evaluation_failed:Math.max(0,requested-finalized.length),final_battles_per_candidate:100,ranking_measurement_policy:tournament?'COMPLETED_20_BATTLE_TOURNAMENT_SCREEN_THEN_COMPLETED_100_BATTLE_FINALISTS_ONLY':'ONLY_THE_SCREENING_WINNER_IS_DISPLAYED_AFTER_A_COMPLETED_BROWSER_STREAMED_100_BATTLE_RESULT'};
  return {...result,search_status:finalized.length?'FINAL_100_COMPLETE':'NO_VALID_FINAL_100_MEASUREMENTS',search_scope:scope,ranked:finalized};
 }

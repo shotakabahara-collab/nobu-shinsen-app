@@ -56,12 +56,13 @@ test('runs the real 100-battle canonical flow in an iPhone WebKit environment',a
  await page.getByLabel('最適化対象').selectOption(backup.formations[1].id);
  await expect(page.getByLabel('探索範囲')).toHaveValue('canonical_all');
  await page.getByRole('button',{name:'最適編成を探索'}).click();
- await expect(page.getByText(/全カタログ探索と事前比較1位の100戦評価が完了しました/)).toBeVisible({timeout:720_000});
+ await expect(page.getByText(/全カタログ探索と上位2候補の各100戦評価が完了しました/)).toBeVisible({timeout:720_000});
  const panel=page.getByLabel('最適編成候補');
  await expect(panel.getByText('全カタログ事前評価 完了',{exact:true})).toBeVisible();
  await expect(panel.getByText(/146\/146武将・236\/236戦法・全34,456関係/)).toBeVisible();
  await expect(panel.getByText(/役割配置24件（4編成組）を事前比較/)).toBeVisible();
- await expect(panel.getByText(/100戦勝率/).first()).toBeVisible();
+ await expect(panel.getByText(/候補4件を各20戦で再比較し、上位2件を各100戦で確定評価/)).toBeVisible();
+ await expect(panel.getByText(/100戦勝率/)).toHaveCount(2);
  await expect(page.locator('body')).not.toContainText('RUNTIME-001');
  await expect(page.locator('body')).not.toContainText('RUNTIME-002');
 });
