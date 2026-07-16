@@ -2,7 +2,7 @@
 from __future__ import annotations
 import copy, gc, itertools, json, math, time
 from custom_evaluate import load_context, resolve_officers_by_awaken_values, resolve_skills, build_best, public_best
-from battle_simulator import simulate_many_balanced
+from battle_simulator import simulate_many_balanced, simulate_once
 from operational_runtime_overlay import audit_best, install_runtime_overlay
 
 _CTX=None
@@ -89,6 +89,63 @@ def _require_balanced_battle_evidence(sim, trials, blocks, label):
     if evidence['status']!='COMPLETE':
         raise RuntimeError(f'{label}: BALANCED_BATTLE_EVIDENCE_STOP '+json.dumps(evidence,ensure_ascii=False))
     return evidence
+
+def _screen_direction(ctx,candidate,target,direction,seed_start,required):
+    """Run the optimizer's small screening sample without Unix signal watchdogs.
+
+    ``simulate_many_balanced`` is retained for the explicit calculate/formal API,
+    but its per-trial watchdog is not reliable inside iPhone/WebKit Pyodide.  The
+    browser worker's proven 100-battle lane also calls ``simulate_once`` directly;
+    screening uses the same outcome-only path here.
+    """
+    left,right=(target,candidate) if direction=='reverse' else (candidate,target)
+    left_wins=right_wins=draws=0;raw_hp=[];failures=[];attempts=0
+    maximum=max(1,int(required))*3
+    while len(raw_hp)<required and attempts<maximum:
+        current_seed=int(seed_start)+attempts;attempts+=1
+        try:
+            result=simulate_once(ctx,copy.deepcopy(left),copy.deepcopy(right),seed=current_seed,verbose=False,trace_enabled=False,runtime_mode='outcome_only')
+        except MemoryError:
+            gc.collect();raise
+        except Exception as error:
+            text=str(error)
+            if 'FORMAL_BATTLE_INPUT_CONTRACT_STOP' in text:raise RuntimeError(text) from error
+            failures.append({'seed':current_seed,'error':text[:300]});continue
+        winner=result.get('winner')
+        if winner=='A':left_wins+=1
+        elif winner=='B':right_wins+=1
+        else:draws+=1
+        raw_hp.append(float(result.get('hp_diff') or 0.0))
+        if len(raw_hp)%5==0:gc.collect()
+    completed=len(raw_hp)
+    return {
+        'trials':required,'completed_trials':completed,
+        'left_wins':left_wins,'right_wins':right_wins,'draws':draws,
+        'left_win_rate':left_wins/completed if completed else 0.0,
+        'right_win_rate':right_wins/completed if completed else 0.0,
+        'avg_hp_diff':sum(raw_hp)/completed if completed else 0.0,
+        'runtime_failures':failures,'next_seed':int(seed_start)+attempts,
+    }
+
+def _simulate_screening_balanced(ctx,candidate,target,trials,seed,blocks):
+    """Return a balanced screening result backed only by completed battles."""
+    block_count=max(1,int(blocks));per=max(1,int(trials)//block_count)
+    forward=[];reverse=[];forward_seed=int(seed);reverse_seed=int(seed)+5003
+    for _ in range(block_count):
+        forward_row=_screen_direction(ctx,candidate,target,'forward',forward_seed,per)
+        reverse_row=_screen_direction(ctx,candidate,target,'reverse',reverse_seed,per)
+        forward.append(forward_row);reverse.append(reverse_row)
+        forward_seed=forward_row['next_seed'];reverse_seed=reverse_row['next_seed']
+    completed=sum(row['completed_trials'] for row in forward+reverse)
+    candidate_wins=sum(row['left_wins'] for row in forward)+sum(row['right_wins'] for row in reverse)
+    forward_hp=sum(row['avg_hp_diff']*row['completed_trials'] for row in forward)
+    reverse_hp=sum(row['avg_hp_diff']*row['completed_trials'] for row in reverse)
+    return {
+        'left_balanced_win_rate':candidate_wins/completed if completed else 0.0,
+        'avg_hp_diff_balanced':(forward_hp-reverse_hp)/completed if completed else 0.0,
+        'forward':forward,'reverse':reverse,
+        'browser_execution_policy':'CANONICAL_SIMULATE_ONCE_OUTCOME_ONLY_NO_UNIX_SIGNAL_WATCHDOG',
+    }
 
 TARGETS={
 'YAMAGATA':{'officers':['山県昌景','飯富虎昌','真田昌幸'],'awaken':[5,5,2],'unit':'騎馬','skills':['矢石飛交','血戦奮闘','赤備え隊','理非曲直','瞬息万変','帰還の凱歌']},
@@ -761,7 +818,12 @@ def optimize_request(request_json):
             rates={};diffs={};cand=_make(item['spec'])
             evidence_by_target={};row_valid=True
             for ti,(target_id,tar) in enumerate(runtime_targets):
-                sim=simulate_many_balanced(_ctx(),copy.deepcopy(cand),copy.deepcopy(tar),trials=trials,seed=seed0+fi*1000+ti*100,blocks=blocks)
+                try:sim=_simulate_screening_balanced(_ctx(),copy.deepcopy(cand),copy.deepcopy(tar),trials=trials,seed=seed0+fi*1000+ti*100,blocks=blocks)
+                except MemoryError:raise
+                except BaseException as error:
+                    row_valid=False;screening_invalid+=1
+                    reason='SCREENING_EXCEPTION_'+type(error).__name__;screening_invalid_reasons[reason]=screening_invalid_reasons.get(reason,0)+1
+                    gc.collect();continue
                 evidence=_balanced_battle_evidence(sim,trials,blocks)
                 if evidence['status']!='COMPLETE':
                     row_valid=False;screening_invalid+=1
@@ -782,7 +844,7 @@ def optimize_request(request_json):
         best['role_variants']=role_rows
         ranked.append(best)
     ranked.sort(key=_rank_key,reverse=True)
-    scope={'catalog_scope':catalog_scope,'search_mode':search_mode,'seed_count':len(seeds),'owned_pool_count':len(owned_pool),'swap_depth':swap_depth,'skill_swap_depth':skill_swap_depth,'confirmed_skill_pool_count':len(skill_pool),'skill_beam_width':beam_width,'skill_prefilter_basis':'canonical staged coverage + priority/bucket quality prefilter' if global_catalog else 'adaptive exact 6-8 skills; beam 9+ using canonical optimizer_priority_score + optimizer_bucket','beam_recall_audit':beam_audit,'variant_count':variant_count,'generated':len(seen),'formal_ready':len(structural),'stopped':stopped,'budget':budget,'budget_cut':budget_cut,'units':units,'shortlist_simulated':placements_simulated,'trials_per_direction':trials,'blocks':blocks,'screening_battles_per_placement':2*max(1,trials//blocks)*blocks,'screening_measurement_policy':'COMPLETED_BATTLES_REQUIRED_ZERO_ZERO_SENTINEL_REJECTED','screening_invalid_count':screening_invalid,'screening_invalid_reasons':screening_invalid_reasons,'target_formal_stops':target_formal_stops,'role_selection_policy':'ALL_SIX_ROLE_ORDERS_ATOMIC_COMMON_RANDOM_SEEDS','role_atomic_budget':True,'role_families_generated':len(families),'role_families_complete':len(complete_families),'role_families_shortlisted':len(family_shortlist),'role_placements_simulated':placements_simulated,'role_placements_expected_per_family':6}
+    scope={'catalog_scope':catalog_scope,'search_mode':search_mode,'seed_count':len(seeds),'owned_pool_count':len(owned_pool),'swap_depth':swap_depth,'skill_swap_depth':skill_swap_depth,'confirmed_skill_pool_count':len(skill_pool),'skill_beam_width':beam_width,'skill_prefilter_basis':'canonical staged coverage + priority/bucket quality prefilter' if global_catalog else 'adaptive exact 6-8 skills; beam 9+ using canonical optimizer_priority_score + optimizer_bucket','beam_recall_audit':beam_audit,'variant_count':variant_count,'generated':len(seen),'formal_ready':len(structural),'stopped':stopped,'budget':budget,'budget_cut':budget_cut,'units':units,'shortlist_simulated':placements_simulated,'trials_per_direction':trials,'blocks':blocks,'screening_battles_per_placement':2*max(1,trials//blocks)*blocks,'screening_measurement_policy':'CANONICAL_SIMULATE_ONCE_OUTCOME_ONLY_COMPLETED_BATTLES_REQUIRED_ZERO_ZERO_SENTINEL_REJECTED','screening_invalid_count':screening_invalid,'screening_invalid_reasons':screening_invalid_reasons,'target_formal_stops':target_formal_stops,'role_selection_policy':'ALL_SIX_ROLE_ORDERS_ATOMIC_COMMON_RANDOM_SEEDS','role_atomic_budget':True,'role_families_generated':len(families),'role_families_complete':len(complete_families),'role_families_shortlisted':len(family_shortlist),'role_placements_simulated':placements_simulated,'role_placements_expected_per_family':6}
     scope.update(catalog_details)
     if global_catalog:
         scope.update({'officer_formal_admission_count':len(admitted_officers),'skill_formal_admission_count':len(admitted_skills),'formal_stop_reasons':stop_reasons})

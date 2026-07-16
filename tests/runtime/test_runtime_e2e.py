@@ -41,7 +41,7 @@ def fake_sim(ctx,candidate,target,trials,seed,blocks):
  forward={'trials':trials,'completed_trials':trials,'left_wins':trials,'right_wins':0,'draws':0,'avg_hp_diff':1.0,'runtime_failures':[]}
  reverse={'trials':trials,'completed_trials':trials,'left_wins':trials,'right_wins':0,'draws':0,'avg_hp_diff':-1.0,'runtime_failures':[]}
  return {'left_balanced_win_rate':0.5,'avg_hp_diff_balanced':1.0,'forward':[forward],'reverse':[reverse]}
-api._make=fake_make;api.simulate_many_balanced=fake_sim
+api._make=fake_make;api._simulate_screening_balanced=fake_sim
 request={'catalog_scope':'canonical_all','seeds':[],'known_awaken_overrides':[{'name':'山本勘助','awaken':5}],'structural_budget':4800,'targets':[{'id':'target','spec':{'officers':['甲','乙','丙'],'awaken':[0,0,0],'unit':'弓','skills':['T1','T2','T3','T4','T5','T6']}}],'units':['足軽','騎馬','鉄砲','弓'],'trials':1,'blocks':1,'role_family_shortlist':4,'seed':100}
 result=json.loads(api.search(json.dumps(request,ensure_ascii=False)))
 print(json.dumps({'scope':scope,'variant_count':len(variants),'variant_officer_count':len(variant_officers),'variant_skill_count':len(variant_skills),'yamamoto_awaken':sorted(yamamoto_awaken),'result':result},ensure_ascii=False))
@@ -75,7 +75,7 @@ def fake_sim(ctx,candidate,target,trials,seed,blocks):
  forward={'trials':trials,'completed_trials':trials,'left_wins':trials,'right_wins':0,'draws':0,'avg_hp_diff':hp,'runtime_failures':[]}
  reverse={'trials':trials,'completed_trials':trials,'left_wins':trials,'right_wins':0,'draws':0,'avg_hp_diff':-hp,'runtime_failures':[]}
  return {'left_balanced_win_rate':0.5,'avg_hp_diff_balanced':hp,'forward':[forward],'reverse':[reverse]}
-api._make=fake_make;api._ctx=lambda:{};api.simulate_many_balanced=fake_sim
+api._make=fake_make;api._ctx=lambda:{};api._simulate_screening_balanced=fake_sim
 seed={'officers':['甲','乙','丙'],'awaken':[1,2,3],'unit':'騎馬','skills':['S1','S2','S3','S4','S5','S6'],'stats':[{'speed':1},{'speed':2},{'speed':3}]}
 target={'officers':['丁','戊','己'],'awaken':[0,0,0],'unit':'弓','skills':['T1','T2','T3','T4','T5','T6']}
 request={'seeds':[seed],'owned_pool':[],'swap_depth':0,'skill_pool':[{'name':'G'},{'name':'H'}],'skill_swap_depth':1,'structural_budget':50,'targets':[{'id':'target','spec':target}],'units':['騎馬'],'trials':1,'blocks':1,'role_family_shortlist':1,'seed':100}
@@ -98,7 +98,7 @@ def fake_make(spec):
 def failed_sim(ctx,candidate,target,trials,seed,blocks):
  row={'trials':trials,'completed_trials':0,'left_wins':0,'right_wins':0,'draws':0,'avg_hp_diff':0.0,'runtime_failures':[{'reason':'STOP'}]}
  return {'left_balanced_win_rate':0.0,'avg_hp_diff_balanced':0.0,'forward':[row],'reverse':[row]}
-api._make=fake_make;api._ctx=lambda:{};api.simulate_many_balanced=failed_sim
+api._make=fake_make;api._ctx=lambda:{};api._simulate_screening_balanced=failed_sim
 seed={'officers':['甲','乙','丙'],'awaken':[0,0,0],'unit':'騎馬','skills':['S1','S2','S3','S4','S5','S6']}
 target={'officers':['丁','戊','己'],'awaken':[0,0,0],'unit':'弓','skills':['T1','T2','T3','T4','T5','T6']}
 request={'seeds':[seed],'owned_pool':[],'swap_depth':0,'skill_pool':[],'skill_swap_depth':0,'structural_budget':50,'targets':[{'id':'target','spec':target}],'units':['騎馬'],'trials':2,'blocks':1,'role_family_shortlist':1,'seed':100}

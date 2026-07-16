@@ -312,6 +312,7 @@ export function applyFinalRecommendationEvaluations(result:RuntimeResult,targetI
   const ah=finiteNumberRecord((a as Record<string,unknown>).hp_diffs)?.[targetId]??Number.NEGATIVE_INFINITY,bh=finiteNumberRecord((b as Record<string,unknown>).hp_diffs)?.[targetId]??Number.NEGATIVE_INFINITY;
   return bh-ah;
  });
- const scope={...(record(result.search_scope)??{}),final_evaluation_requested:rawRanked.length,final_evaluation_completed:finalized.length,final_evaluation_failed:rawRanked.length-finalized.length,final_battles_per_candidate:100,ranking_measurement_policy:'ONLY_COMPLETED_BROWSER_STREAMED_100_BATTLE_RESULTS_ARE_DISPLAYED'};
+ const requested=evaluations.length;
+ const scope={...(record(result.search_scope)??{}),preliminary_candidate_count:rawRanked.length,final_evaluation_requested:requested,final_evaluation_completed:finalized.length,final_evaluation_failed:Math.max(0,requested-finalized.length),final_battles_per_candidate:100,ranking_measurement_policy:'ONLY_THE_SCREENING_WINNER_IS_DISPLAYED_AFTER_A_COMPLETED_BROWSER_STREAMED_100_BATTLE_RESULT'};
  return {...result,search_status:finalized.length?'FINAL_100_COMPLETE':'NO_VALID_FINAL_100_MEASUREMENTS',search_scope:scope,ranked:finalized};
 }
