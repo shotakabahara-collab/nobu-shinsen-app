@@ -28,6 +28,7 @@ jobs:
         run: |
           node <<'NODE' > bonsai-validation.txt 2>&1
           const fs=require('fs');
+          const vm=require('vm');
           try {
             const path='public/bonsai';
             const html=fs.readFileSync(`${path}/index.html`,'utf8');
@@ -35,7 +36,7 @@ jobs:
             const manifest=JSON.parse(fs.readFileSync(`${path}/manifest.webmanifest`,'utf8'));
             const match=html.match(/<script>([\s\S]*)<\/script>/);
             if(!match) throw new Error('inline application script missing');
-            new Function(match[1]);
+            new vm.Script(match[1],{filename:'bonsai-inline.js'});
             const required=['BONSAI','confirmPrune','この操作は取り消せません','enterShow','localStorage','serviceWorker.register'];
             for(const text of required) if(!html.includes(text)) throw new Error(`missing: ${text}`);
             if(manifest.short_name!=='BONSAI'||manifest.display!=='standalone'||manifest.start_url!=='./') throw new Error('manifest invalid');
