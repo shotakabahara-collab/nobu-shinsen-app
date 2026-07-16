@@ -1,0 +1,52 @@
+name: BONSAI Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'public/bonsai/**'
+      - '.github/workflows/bonsai-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'public/bonsai/**'
+      - '.github/workflows/bonsai-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-bonsai:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate BONSAI application
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const path='public/bonsai';
+          const html=fs.readFileSync(`${path}/index.html`,'utf8');
+          const sw=fs.readFileSync(`${path}/sw.js`,'utf8');
+          const manifest=JSON.parse(fs.readFileSync(`${path}/manifest.webmanifest`,'utf8'));
+          const match=html.match(/<script>([\s\S]*)<\/script>/);
+          if(!match) throw new Error('inline application script missing');
+          new Function(match[1]);
+          const required=['BONSAI','confirmPrune','この操作は取り消せません','enterShow','localStorage','serviceWorker.register'];
+          for(const text of required) if(!html.includes(text)) throw new Error(`missing: ${text}`);
+          if(manifest.short_name!=='BONSAI'||manifest.display!=='standalone'||manifest.start_url!=='./') throw new Error('manifest invalid');
+          for(const text of ['caches.open','index.html','manifest.webmanifest','icon.svg']) if(!sw.includes(text)) throw new Error(`service worker missing: ${text}`);
+          console.log('BONSAI syntax: PASS');
+          console.log('BONSAI irreversible pruning: PASS');
+          console.log('BONSAI PWA assets: PASS');
+          NODE
+      - name: Verify static HTTP delivery
+        run: |
+          python3 -m http.server 4173 --directory public >/tmp/bonsai-http.log 2>&1 &
+          server=$!
+          trap 'kill $server' EXIT
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:4173/bonsai/ >/tmp/bonsai.html && break; sleep 0.2; done
+          grep -Fq '<title>BONSAI</title>' /tmp/bonsai.html
+          curl -fsS http://127.0.0.1:4173/bonsai/manifest.webmanifest | grep -Fq 'BONSAI'
+          curl -fsS http://127.0.0.1:4173/bonsai/sw.js | grep -Fq 'bonsai-v08-iphone-live'
